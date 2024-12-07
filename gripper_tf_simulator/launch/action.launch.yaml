@@ -1,0 +1,6 @@
+launch:
+
+- include:
+    file: "$(find-pkg-share dynamic_tf)/gripper_action_client.py"
+- include:
+    file: "$(find-pkg-share dynamic_tf)/gripper_action_server.py"
