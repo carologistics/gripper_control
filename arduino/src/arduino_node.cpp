@@ -29,6 +29,10 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
         std::bind(&ArduinoNode::handle_serial_message, this,
                   std::placeholders::_1),
         std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
+
+    // Add this line to initialize the timestamp
+    comm_stats_.last_msg_time = std::chrono::steady_clock::now();
+
   } catch (const boost::system::system_error &e) {
     RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
                  e.what());
@@ -82,9 +86,11 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
 ArduinoNode::~ArduinoNode() { port_.reset(); }
 
 void ArduinoNode::timer_callback() {
-  // Periodic checks and updates
-  if (port_) {
-    // Add monitoring code here
+  if (!port_) {
+    return; // Skip checks if no port
+  }
+
+  try {
     // Check if waypoint sensor is enabled
     if (wp_sensor_enable_) {
       std::stringstream cmd;
@@ -99,14 +105,19 @@ void ArduinoNode::timer_callback() {
     send_arduino_command("?"); // Query device status periodically
 
     // Add watchdog functionality
-    if ((std::chrono::steady_clock::now() - comm_stats_.last_msg_time) >
-        std::chrono::seconds(5)) {
+    auto now = std::chrono::steady_clock::now();
+    if ((now - comm_stats_.last_msg_time) > std::chrono::seconds(5)) {
       handle_error("Communication timeout");
     }
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(this->get_logger(), "Timer callback error: %s", e.what());
   }
 }
 
 void ArduinoNode::handle_serial_message(const std::string &msg) {
+  // Update timestamp at start of message handling
+  comm_stats_.last_msg_time = std::chrono::steady_clock::now();
+
   RCLCPP_DEBUG(this->get_logger(), "Received message: %s", msg.c_str());
   // Add message handling code here
   // Parse message format: "<type> <data>"
