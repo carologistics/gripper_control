@@ -41,6 +41,11 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
     auto port = this->get_parameter("port").as_string();
     auto baud_rate = this->get_parameter("baud_rate").as_int();
 
+    // Check if device exists
+    if (access(port.c_str(), F_OK) == -1) {
+      throw SerialPortError("Device file does not exist: " + port);
+    }
+
     RCLCPP_INFO(this->get_logger(), "Attempting to connect to %s at %ld baud",
                 port.c_str(), baud_rate);
 
@@ -50,7 +55,17 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
                   std::placeholders::_1),
         std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
 
-    device_state_ = DeviceState::OPERATIONAL;
+    // Test communication
+    device_state_ = DeviceState::INITIALIZING;
+    send_arduino_command("?"); // Send initial status request
+
+    // Wait briefly for response
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    if (device_state_ == DeviceState::INITIALIZING) {
+      throw SerialPortError("No response from device");
+    }
+
     RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino");
   } catch (const SerialPortError &e) {
     RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
@@ -221,6 +236,7 @@ void ArduinoNode::timer_callback() {
 void ArduinoNode::handle_serial_message(const std::string &msg) {
   // Update timestamp at start of message handling
   comm_stats_.last_msg_time = std::chrono::steady_clock::now();
+  comm_stats_.bytes_received += msg.length();
 
   RCLCPP_DEBUG(this->get_logger(), "Received message: %s", msg.c_str());
   // Add message handling code here
@@ -279,6 +295,9 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     std::string status;
     iss >> status;
     if (status == "OK") {
+      if (device_state_ == DeviceState::INITIALIZING) {
+        RCLCPP_INFO(this->get_logger(), "Initial communication successful");
+      }
       device_state_ = DeviceState::OPERATIONAL;
     }
     comm_stats_.last_msg_time = std::chrono::steady_clock::now();
