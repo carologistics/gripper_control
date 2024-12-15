@@ -261,101 +261,18 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     }
   }
 
-  if (type == "E") { // Error message
-    std::string error_msg = msg.substr(msg.find(" ") + 1);
+  if (type == "M") { // Moving
+    arduino_status_ = ArduinoStatus::MOVING;
+    parse_position_and_gripper(iss);
+  } else if (type == "I") { // Idle
+    arduino_status_ = ArduinoStatus::IDLE;
+    parse_position_and_gripper(iss);
+    handle_goals_completed();
+  } else if (type == "E") { // Error
+    std::string error_msg;
+    std::getline(iss, error_msg);
     handle_error("Arduino error: " + error_msg);
-    return;
-  }
-
-  if (type == "W" &&
-      config_.enable_tf_broadcast) { // Only broadcast TF if enabled
-    int value;
-    iss >> value;
-    wp_sensed_ = value > 0;
-
-    // Broadcast transform if waypoint detected
-    if (wp_sensed_) {
-      geometry_msgs::msg::TransformStamped t;
-      t.header.stamp = this->get_clock()->now();
-      t.header.frame_id = config_.base_frame;    // Use configured frame
-      t.child_frame_id = config_.waypoint_frame; // Use configured frame
-      t.transform.translation.x = 0.0;
-      t.transform.translation.y = 0.0;
-      t.transform.translation.z = 0.0;
-      t.transform.rotation.x = 0.0;
-      t.transform.rotation.y = 0.0;
-      t.transform.rotation.z = 0.0;
-      t.transform.rotation.w = 1.0;
-      tf_broadcaster_->sendTransform(t);
-    }
-  }
-
-  // Add status message handling
-  if (type == "S") { // Status message
-    std::string status;
-    iss >> status;
-    if (status == "OK") {
-      if (device_state_ == DeviceState::INITIALIZING) {
-        RCLCPP_INFO(this->get_logger(), "Initial communication successful");
-      }
-      device_state_ = DeviceState::OPERATIONAL;
-    }
-    comm_stats_.last_msg_time = std::chrono::steady_clock::now();
-  }
-
-  if (type == "P") { // Position update
-    iss >> status_.x_position >> status_.y_position >> status_.z_position;
-  } else if (type == "G") { // Gripper status
-    int closed;
-    iss >> closed;
-    status_.gripper_closed = (closed > 0);
-  } else if (type == "L") { // Limits
-    iss >> status_.x_max >> status_.y_max >> status_.z_max;
-  } else if (type == "M") { // Motion status
-    std::string motion_status;
-    iss >> motion_status;
-    status_.final = (motion_status == "IDLE");
-
-    if (motion_status == "MOVING") {
-      arduino_status_ = ArduinoStatus::MOVING;
-    } else if (motion_status == "IDLE") {
-      arduino_status_ = ArduinoStatus::IDLE;
-      // Check if goals completed
-      if (active_move_goal_) {
-        auto result = std::make_shared<MoveXYZ::Result>();
-        result->success = true;
-        result->message = "Move completed";
-        active_move_goal_->succeed(result);
-        active_move_goal_.reset();
-      }
-      if (active_gripper_goal_) {
-        auto result = std::make_shared<Gripper::Result>();
-        result->success = true;
-        result->message = "Gripper action completed";
-        active_gripper_goal_->succeed(result);
-        active_gripper_goal_.reset();
-      }
-    } else if (motion_status.find("ERROR") != std::string::npos) {
-      // Handle errors for active goals
-      if (active_move_goal_) {
-        auto result = std::make_shared<MoveXYZ::Result>();
-        result->success = false;
-        result->message = "Motion error: " + motion_status;
-        active_move_goal_->abort(result);
-        active_move_goal_.reset();
-      }
-      if (active_gripper_goal_) {
-        auto result = std::make_shared<Gripper::Result>();
-        result->success = false;
-        result->message = "Motion error: " + motion_status;
-        active_gripper_goal_->abort(result);
-        active_gripper_goal_.reset();
-      }
-    }
-
-    // Publish feedback for active goals
-    publish_move_xyz_feedback();
-    publish_gripper_feedback();
+    handle_goals_error();
   }
 
   // Increment message ID for commands
@@ -412,18 +329,22 @@ void ArduinoNode::cmd_vel_callback(
 }
 
 void ArduinoNode::handle_move_command(float linear_x, float angular_z) {
-  std::stringstream cmd;
   if (linear_x == 0.0 && angular_z == 0.0) {
     handle_stop_command();
     return;
   }
-
-  cmd << "M" << linear_x << " "
-      << angular_z; // Removed space after M to match Fawkes
-  send_arduino_command(cmd.str());
+  // Convert velocity commands to position increments
+  // and use X, Y commands instead
+  std::stringstream cmd_x, cmd_y;
+  cmd_x << "X" << linear_x;
+  cmd_y << "Y" << angular_z;
+  send_arduino_command(cmd_x.str());
+  send_arduino_command(cmd_y.str());
 }
 
-void ArduinoNode::handle_stop_command() { send_arduino_command("S"); }
+void ArduinoNode::handle_stop_command() {
+  send_arduino_command("."); // Use correct stop command from commands.h
+}
 
 void ArduinoNode::send_arduino_command(const std::string &cmd) {
   if (port_) {
@@ -471,7 +392,8 @@ rclcpp_action::CancelResponse ArduinoNode::handle_calibrate_cancel(
 void ArduinoNode::handle_calibrate_accepted(
     std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>> goal_handle) {
   auto goal = goal_handle->get_goal();
-  send_arduino_command(goal->double_calibrate ? "D" : "C");
+  // Use correct calibrate commands from commands.h
+  send_arduino_command(goal->double_calibrate ? "c" : "C");
 
   auto result = std::make_shared<Calibrate::Result>();
   result->success = true;
@@ -667,14 +589,15 @@ void ArduinoNode::execute_move_xyz(
   const auto goal = goal_handle->get_goal();
   active_move_goal_ = goal_handle;
 
-  std::stringstream cmd;
-  cmd << (goal->relative ? "MR " : "MA ") << goal->x << " " << goal->y << " "
-      << goal->z;
-  if (!goal->relative && !goal->target_frame.empty()) {
-    cmd << " " << goal->target_frame;
-  }
+  // Send separate X, Y, Z commands according to protocol
+  std::stringstream cmd_x, cmd_y, cmd_z;
+  cmd_x << "X" << goal->x;
+  cmd_y << "Y" << goal->y;
+  cmd_z << "Z" << goal->z;
 
-  send_arduino_command(cmd.str());
+  send_arduino_command(cmd_x.str());
+  send_arduino_command(cmd_y.str());
+  send_arduino_command(cmd_z.str());
 }
 
 void ArduinoNode::execute_gripper(
@@ -760,6 +683,33 @@ rclcpp_action::CancelResponse ArduinoNode::handle_gripper_cancel(
 void ArduinoNode::handle_gripper_accepted(
     std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> goal_handle) {
   execute_gripper(goal_handle);
+}
+
+void ArduinoNode::parse_position_and_gripper(std::istringstream &iss) {
+  // Parse X Y Z positions
+  iss >> status_.x_position >> status_.y_position >> status_.z_position;
+
+  // Parse gripper status
+  std::string gripper_status;
+  iss >> gripper_status;
+  status_.gripper_closed = (gripper_status == "CLOSED");
+}
+
+void ArduinoNode::handle_goals_completed() {
+  if (active_move_goal_) {
+    auto result = std::make_shared<MoveXYZ::Result>();
+    result->success = true;
+    result->message = "Move completed";
+    active_move_goal_->succeed(result);
+    active_move_goal_.reset();
+  }
+  if (active_gripper_goal_) {
+    auto result = std::make_shared<Gripper::Result>();
+    result->success = true;
+    result->message = "Gripper action completed";
+    active_gripper_goal_->succeed(result);
+    active_gripper_goal_.reset();
+  }
 }
 
 int main(int argc, char **argv) {
