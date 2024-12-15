@@ -45,18 +45,17 @@ private:
   using MoveXYZ = arduino::action::MoveXYZ;
   using Gripper = arduino::action::Gripper;
 
+  // Move retry count initialization to header
+  int retry_count_{0};
+  const int MAX_RETRIES{3};
+  std::chrono::steady_clock::time_point last_reconnect_attempt_;
+  const std::chrono::seconds reconnect_interval_{5};
+
   void timer_callback();
   void handle_serial_message(const std::string &msg);
   void handle_disconnect();
   void handle_error(const std::string &error_msg);
-  int retry_count_ = 0;
-  const int MAX_RETRIES = 3;
   bool attempt_reconnect();
-
-  // Add new member variable for reconnection
-  std::chrono::steady_clock::time_point last_reconnect_attempt_;
-  const std::chrono::seconds reconnect_interval_{
-      5}; // Try reconnecting every 5 seconds
 
   // Action server callbacks
   rclcpp_action::GoalResponse

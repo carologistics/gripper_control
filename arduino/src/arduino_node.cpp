@@ -21,8 +21,9 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
   comm_stats_.bytes_sent = 0;
   comm_stats_.errors = 0;
 
-  // Initialize device state
+  // Initialize device state and reconnection timing
   device_state_ = DeviceState::DISCONNECTED;
+  last_reconnect_attempt_ = std::chrono::steady_clock::now();
 
   // Create diagnostics publisher first
   diagnostics_pub_ =
@@ -40,6 +41,9 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
     auto port = this->get_parameter("port").as_string();
     auto baud_rate = this->get_parameter("baud_rate").as_int();
 
+    RCLCPP_INFO(this->get_logger(), "Attempting to connect to %s at %ld baud",
+                port.c_str(), baud_rate);
+
     port_ = std::make_unique<SerialPort>(
         port,
         std::bind(&ArduinoNode::handle_serial_message, this,
@@ -47,14 +51,16 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
         std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
 
     device_state_ = DeviceState::OPERATIONAL;
-  } catch (const boost::system::system_error &e) {
+    RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino");
+  } catch (const SerialPortError &e) {
     RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
                  e.what());
-    device_state_ = DeviceState::ERROR;
-  } catch (const std::exception &e) {
-    RCLCPP_WARN(this->get_logger(), "Failed to connect to Arduino: %s",
-                e.what());
     device_state_ = DeviceState::DISCONNECTED;
+    // Don't rethrow - allow node to keep running
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(this->get_logger(), "Unexpected error: %s", e.what());
+    device_state_ = DeviceState::DISCONNECTED;
+    // Don't rethrow - allow node to keep running
   }
 
   // Initialize TF broadcaster
@@ -170,8 +176,12 @@ void ArduinoNode::cleanup() {
 
 void ArduinoNode::timer_callback() {
   if (!port_) {
-    if (device_state_ != DeviceState::ERROR) {
-      handle_error("No serial port connection");
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_reconnect_attempt_ > reconnect_interval_) {
+      last_reconnect_attempt_ = now;
+      if (attempt_reconnect()) {
+        RCLCPP_INFO(this->get_logger(), "Successfully reconnected to Arduino");
+      }
     }
     return;
   }

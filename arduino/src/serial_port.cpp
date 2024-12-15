@@ -1,4 +1,3 @@
-
 // Copyright (c) 2024 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,32 +26,36 @@ SerialPort::SerialPort(
   start_of_command_ = start_of_command;
   end_of_command_ = end_of_command;
 
-  port_ = std::make_shared<boost::asio::serial_port>(io_service_);
-  boost::system::error_code ec;
-  port_->open(port, ec);
-  if (ec) {
-    throw ec;
-  }
-
-  port_->set_option(serial_port_base::baud_rate(baud_rate));
-  port_->set_option(serial_port_base::character_size(8));
-  port_->set_option(
-      serial_port_base::stop_bits(serial_port_base::stop_bits::one));
-  port_->set_option(serial_port_base::parity(serial_port_base::parity::none));
-  port_->set_option(
-      serial_port_base::flow_control(serial_port_base::flow_control::none));
-
-  serial_thread_ = boost::thread([this]() {
-    while (!terminate_thread_) {
-      io_service_.run_one_for(std::chrono::seconds(2));
-      if (!port_ || !port_->is_open()) {
-        terminate_thread_ = true;
-        disconnect_callback_();
-      }
+  try {
+    port_ = std::make_shared<boost::asio::serial_port>(io_service_);
+    boost::system::error_code ec;
+    port_->open(port, ec);
+    if (ec) {
+      throw SerialPortError(ec);
     }
-  });
 
-  async_read_some_();
+    port_->set_option(serial_port_base::baud_rate(baud_rate));
+    port_->set_option(serial_port_base::character_size(8));
+    port_->set_option(
+        serial_port_base::stop_bits(serial_port_base::stop_bits::one));
+    port_->set_option(serial_port_base::parity(serial_port_base::parity::none));
+    port_->set_option(
+        serial_port_base::flow_control(serial_port_base::flow_control::none));
+
+    serial_thread_ = boost::thread([this]() {
+      while (!terminate_thread_) {
+        io_service_.run_one_for(std::chrono::seconds(2));
+        if (!port_ || !port_->is_open()) {
+          terminate_thread_ = true;
+          disconnect_callback_();
+        }
+      }
+    });
+
+    async_read_some_();
+  } catch (const boost::system::system_error &e) {
+    throw SerialPortError(e.what());
+  }
 }
 
 SerialPort::~SerialPort() {

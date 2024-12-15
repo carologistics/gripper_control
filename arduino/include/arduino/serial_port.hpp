@@ -25,6 +25,8 @@
 class SerialPortError : public std::runtime_error {
 public:
   explicit SerialPortError(const std::string &msg) : std::runtime_error(msg) {}
+  explicit SerialPortError(const boost::system::error_code &ec)
+      : std::runtime_error(ec.message()) {}
 };
 
 class SerialPort {
