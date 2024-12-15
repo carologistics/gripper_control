@@ -1,0 +1,10 @@
+
+#goal
+bool double_calibrate
+---
+#result
+bool success
+string message
+---
+#feedback
+float32 progress

@@ -1,0 +1,9 @@
+# Request (empty)
+---
+# Response
+bool connected
+string state
+string last_error
+int32 bytes_received
+int32 bytes_sent
+int32 errors

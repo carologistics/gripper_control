@@ -1,0 +1,9 @@
+
+#goal
+---
+#result
+bool success
+string message
+---
+#feedback
+float32 progress
