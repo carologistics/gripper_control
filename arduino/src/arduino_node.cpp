@@ -51,8 +51,10 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
     RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
                  e.what());
     device_state_ = DeviceState::ERROR;
-    publish_diagnostics(); // Publish initial error state
-    // Don't throw - allow node to keep running for recovery attempts
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(this->get_logger(), "Failed to connect to Arduino: %s",
+                e.what());
+    device_state_ = DeviceState::DISCONNECTED;
   }
 
   // Initialize TF broadcaster
@@ -83,6 +85,24 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
       std::bind(&ArduinoNode::handle_calibrate_accepted, this,
                 std::placeholders::_1));
 
+  move_xyz_action_server_ = rclcpp_action::create_server<MoveXYZ>(
+      this, "arduino/move_xyz",
+      std::bind(&ArduinoNode::handle_move_xyz_goal, this, std::placeholders::_1,
+                std::placeholders::_2),
+      std::bind(&ArduinoNode::handle_move_xyz_cancel, this,
+                std::placeholders::_1),
+      std::bind(&ArduinoNode::handle_move_xyz_accepted, this,
+                std::placeholders::_1));
+
+  gripper_action_server_ = rclcpp_action::create_server<Gripper>(
+      this, "arduino/gripper",
+      std::bind(&ArduinoNode::handle_gripper_goal, this, std::placeholders::_1,
+                std::placeholders::_2),
+      std::bind(&ArduinoNode::handle_gripper_cancel, this,
+                std::placeholders::_1),
+      std::bind(&ArduinoNode::handle_gripper_accepted, this,
+                std::placeholders::_1));
+
   // Create cmd_vel subscription
   cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
       "cmd_vel", 10,
@@ -102,6 +122,9 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
   // Create status publisher
   status_pub_ =
       this->create_publisher<arduino::msg::Status>("arduino/status", 10);
+
+  // Initialize feedback tracking
+  last_feedback_time_ = std::chrono::steady_clock::now();
 }
 
 ArduinoNode::~ArduinoNode() { cleanup(); }
@@ -125,6 +148,24 @@ void ArduinoNode::cleanup() {
   // Clean up action servers
   home_action_server_.reset();
   calibrate_action_server_.reset();
+
+  // Add action server cleanup
+  if (active_move_goal_) {
+    auto result = std::make_shared<MoveXYZ::Result>();
+    result->success = false;
+    result->message = "Node shutting down";
+    active_move_goal_->abort(result);
+  }
+
+  if (active_gripper_goal_) {
+    auto result = std::make_shared<Gripper::Result>();
+    result->success = false;
+    result->message = "Node shutting down";
+    active_gripper_goal_->abort(result);
+  }
+
+  move_xyz_action_server_.reset();
+  gripper_action_server_.reset();
 }
 
 void ArduinoNode::timer_callback() {
@@ -161,6 +202,10 @@ void ArduinoNode::timer_callback() {
     RCLCPP_ERROR(this->get_logger(), "Timer callback error: %s", e.what());
     handle_error(e.what());
   }
+
+  // Add feedback monitoring
+  check_action_timeouts();
+  handle_feedback_updates();
 }
 
 void ArduinoNode::handle_serial_message(const std::string &msg) {
@@ -173,6 +218,28 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
   std::istringstream iss(msg);
   std::string type;
   iss >> type;
+
+  // Add checksum verification
+  size_t plus_pos = msg.find_last_of('+');
+  if (plus_pos != std::string::npos && plus_pos < msg.length() - 1) {
+    int received_checksum = std::stoi(msg.substr(plus_pos + 1));
+    int calculated_checksum = 0;
+    for (size_t i = 0; i < plus_pos; i++) {
+      calculated_checksum += msg[i];
+    }
+    calculated_checksum = (calculated_checksum + 128) % 256;
+
+    if (calculated_checksum != received_checksum) {
+      RCLCPP_WARN(this->get_logger(), "Checksum mismatch!");
+      return;
+    }
+  }
+
+  if (type == "E") { // Error message
+    std::string error_msg = msg.substr(msg.find(" ") + 1);
+    handle_error("Arduino error: " + error_msg);
+    return;
+  }
 
   if (type == "W" &&
       config_.enable_tf_broadcast) { // Only broadcast TF if enabled
@@ -219,18 +286,47 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     std::string motion_status;
     iss >> motion_status;
     status_.final = (motion_status == "IDLE");
+
     if (motion_status == "MOVING") {
       arduino_status_ = ArduinoStatus::MOVING;
-    } else if (motion_status == "ERROR_X") {
-      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_X;
-    } else if (motion_status == "ERROR_Y") {
-      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_Y;
-    } else if (motion_status == "ERROR_Z") {
-      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_Z;
-    } else {
+    } else if (motion_status == "IDLE") {
       arduino_status_ = ArduinoStatus::IDLE;
+      // Check if goals completed
+      if (active_move_goal_) {
+        auto result = std::make_shared<MoveXYZ::Result>();
+        result->success = true;
+        result->message = "Move completed";
+        active_move_goal_->succeed(result);
+        active_move_goal_.reset();
+      }
+      if (active_gripper_goal_) {
+        auto result = std::make_shared<Gripper::Result>();
+        result->success = true;
+        result->message = "Gripper action completed";
+        active_gripper_goal_->succeed(result);
+        active_gripper_goal_.reset();
+      }
+    } else if (motion_status.find("ERROR") != std::string::npos) {
+      // Handle errors for active goals
+      if (active_move_goal_) {
+        auto result = std::make_shared<MoveXYZ::Result>();
+        result->success = false;
+        result->message = "Motion error: " + motion_status;
+        active_move_goal_->abort(result);
+        active_move_goal_.reset();
+      }
+      if (active_gripper_goal_) {
+        auto result = std::make_shared<Gripper::Result>();
+        result->success = false;
+        result->message = "Motion error: " + motion_status;
+        active_gripper_goal_->abort(result);
+        active_gripper_goal_.reset();
+      }
     }
-    status_.status = static_cast<uint32_t>(arduino_status_);
+
+    // Publish feedback for active goals
+    publish_move_xyz_feedback();
+    publish_gripper_feedback();
   }
 
   // Increment message ID for commands
@@ -516,7 +612,128 @@ void ArduinoNode::declare_parameters() {
       this->get_parameter("status_frequency").as_double();
 }
 
+void ArduinoNode::publish_move_xyz_feedback() {
+  if (active_move_goal_) {
+    auto feedback = std::make_shared<MoveXYZ::Feedback>();
+    feedback->x_position = status_.x_position;
+    feedback->y_position = status_.y_position;
+    feedback->z_position = status_.z_position;
+    feedback->moving = (arduino_status_ == ArduinoStatus::MOVING);
+    active_move_goal_->publish_feedback(feedback);
+  }
+}
+
+void ArduinoNode::publish_gripper_feedback() {
+  if (active_gripper_goal_) {
+    auto feedback = std::make_shared<Gripper::Feedback>();
+    feedback->gripper_closed = status_.gripper_closed;
+    feedback->moving = (arduino_status_ == ArduinoStatus::MOVING);
+    active_gripper_goal_->publish_feedback(feedback);
+  }
+}
+
+void ArduinoNode::execute_move_xyz(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>> goal_handle) {
+  const auto goal = goal_handle->get_goal();
+  active_move_goal_ = goal_handle;
+
+  std::stringstream cmd;
+  cmd << (goal->relative ? "MR " : "MA ") << goal->x << " " << goal->y << " "
+      << goal->z;
+  if (!goal->relative && !goal->target_frame.empty()) {
+    cmd << " " << goal->target_frame;
+  }
+
+  send_arduino_command(cmd.str());
+}
+
+void ArduinoNode::execute_gripper(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> goal_handle) {
+  const auto goal = goal_handle->get_goal();
+  active_gripper_goal_ = goal_handle;
+
+  send_arduino_command(goal->close ? "G" : "O");
+}
+
+// Add action server handlers
+rclcpp_action::GoalResponse
+ArduinoNode::handle_move_xyz_goal(const rclcpp_action::GoalUUID &,
+                                  std::shared_ptr<const MoveXYZ::Goal>) {
+  if (active_move_goal_ != nullptr) {
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}
+
+rclcpp_action::CancelResponse ArduinoNode::handle_move_xyz_cancel(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>>) {
+  handle_stop_command();
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void ArduinoNode::handle_move_xyz_accepted(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>> goal_handle) {
+  execute_move_xyz(goal_handle);
+}
+
+void ArduinoNode::handle_feedback_updates() {
+  if (!port_ || device_state_ != DeviceState::OPERATIONAL) {
+    return;
+  }
+
+  // Update last feedback time
+  last_feedback_time_ = std::chrono::steady_clock::now();
+
+  // Publish feedback for all active goals
+  publish_move_xyz_feedback();
+  publish_gripper_feedback();
+
+  // Request status update from Arduino
+  send_arduino_command("S");
+}
+
+void ArduinoNode::check_action_timeouts() {
+  auto now = std::chrono::steady_clock::now();
+  if (now - last_feedback_time_ > feedback_timeout_) {
+    if (active_move_goal_) {
+      auto result = std::make_shared<MoveXYZ::Result>();
+      result->success = false;
+      result->message = "Action timed out";
+      active_move_goal_->abort(result);
+      active_move_goal_.reset();
+    }
+    if (active_gripper_goal_) {
+      auto result = std::make_shared<Gripper::Result>();
+      result->success = false;
+      result->message = "Action timed out";
+      active_gripper_goal_->abort(result);
+      active_gripper_goal_.reset();
+    }
+  }
+}
+
+rclcpp_action::GoalResponse
+ArduinoNode::handle_gripper_goal(const rclcpp_action::GoalUUID &,
+                                 std::shared_ptr<const Gripper::Goal>) {
+  if (active_gripper_goal_ != nullptr) {
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+}
+
+rclcpp_action::CancelResponse ArduinoNode::handle_gripper_cancel(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>>) {
+  handle_stop_command();
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void ArduinoNode::handle_gripper_accepted(
+    std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> goal_handle) {
+  execute_gripper(goal_handle);
+}
+
 int main(int argc, char **argv) {
+
   rclcpp::init(argc, argv);
   rclcpp::spin(std::make_shared<ArduinoNode>());
   rclcpp::shutdown();

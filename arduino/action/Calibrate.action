@@ -1,10 +1,9 @@
-
-#goal
+# Goal
 bool double_calibrate
 ---
-#result
+# Result
 bool success
 string message
 ---
-#feedback
-float32 progress
+# Feedback
+float32 progress # 0.0-1.0 indicating calibration progress

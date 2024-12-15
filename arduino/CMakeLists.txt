@@ -28,8 +28,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Status.msg"
   "srv/GetStatus.srv"
   "srv/ResetDevice.srv"
+
   "action/Home.action"
   "action/Calibrate.action"
+  "action/MoveXYZ.action"
+  "action/Gripper.action"
 )
 
 # Create a target for the generated interfaces

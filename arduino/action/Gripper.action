@@ -1,0 +1,10 @@
+# Goal
+bool close
+---
+# Result
+bool success
+string message
+---
+# Feedback
+bool gripper_closed
+bool moving

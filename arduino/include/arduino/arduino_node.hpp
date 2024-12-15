@@ -16,8 +16,10 @@
 #define ARDUINO_NODE_HPP
 
 #include "arduino/action/calibrate.hpp"
+#include "arduino/action/gripper.hpp"
 #include "arduino/action/home.hpp"
-#include "arduino/msg/status.hpp" // Add this include
+#include "arduino/action/move_xyz.hpp"
+#include "arduino/msg/status.hpp"
 #include "arduino/serial_port.hpp"
 #include "arduino/srv/get_status.hpp"
 #include "arduino/srv/reset_device.hpp"
@@ -26,7 +28,6 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "std_msgs/msg/string.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 
 #include <memory>
@@ -41,6 +42,9 @@ public:
   ~ArduinoNode();
 
 private:
+  using MoveXYZ = arduino::action::MoveXYZ;
+  using Gripper = arduino::action::Gripper;
+
   void timer_callback();
   void handle_serial_message(const std::string &msg);
   void handle_disconnect();
@@ -48,6 +52,11 @@ private:
   int retry_count_ = 0;
   const int MAX_RETRIES = 3;
   bool attempt_reconnect();
+
+  // Add new member variable for reconnection
+  std::chrono::steady_clock::time_point last_reconnect_attempt_;
+  const std::chrono::seconds reconnect_interval_{
+      5}; // Try reconnecting every 5 seconds
 
   // Action server callbacks
   rclcpp_action::GoalResponse
@@ -82,6 +91,8 @@ private:
   // Action servers
   rclcpp_action::Server<Home>::SharedPtr home_action_server_;
   rclcpp_action::Server<Calibrate>::SharedPtr calibrate_action_server_;
+  rclcpp_action::Server<MoveXYZ>::SharedPtr move_xyz_action_server_;
+  rclcpp_action::Server<Gripper>::SharedPtr gripper_action_server_;
 
   // Movement subscription
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
@@ -154,6 +165,37 @@ private:
   // Status publisher
   rclcpp::Publisher<arduino::msg::Status>::SharedPtr status_pub_;
 
+  // Add new action handlers
+  rclcpp_action::GoalResponse
+  handle_move_xyz_goal(const rclcpp_action::GoalUUID &,
+                       std::shared_ptr<const MoveXYZ::Goal>);
+  rclcpp_action::CancelResponse handle_move_xyz_cancel(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>>);
+  void handle_move_xyz_accepted(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>>);
+  void execute_move_xyz(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>>);
+
+  rclcpp_action::GoalResponse
+  handle_gripper_goal(const rclcpp_action::GoalUUID &,
+                      std::shared_ptr<const Gripper::Goal>);
+  rclcpp_action::CancelResponse handle_gripper_cancel(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>>);
+  void handle_gripper_accepted(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>>);
+  void execute_gripper(
+      std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>>);
+
+  // Add goal tracking
+  std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveXYZ>> active_move_goal_;
+  std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>>
+      active_gripper_goal_;
+
+  // Add helper methods for goal handling
+  void check_goal_progress();
+  void publish_move_xyz_feedback();
+  void publish_gripper_feedback();
+
   // Add parameter declarations
   void declare_parameters();
 
@@ -167,5 +209,11 @@ private:
 
   // Add cleanup helper
   void cleanup();
+
+  // Add goal tracking and feedback handling
+  void handle_feedback_updates();
+  void check_action_timeouts();
+  std::chrono::steady_clock::time_point last_feedback_time_;
+  const std::chrono::seconds feedback_timeout_{5}; // 5 second timeout
 };
 #endif // ARDUINO_NODE_HPP
