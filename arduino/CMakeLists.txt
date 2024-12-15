@@ -73,6 +73,7 @@ install(TARGETS
 install(DIRECTORY
   launch
   action
+  msg        # Add msg directory to installation
   DESTINATION share/${PROJECT_NAME}
 )
 

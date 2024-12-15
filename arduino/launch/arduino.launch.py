@@ -22,7 +22,20 @@ def generate_launch_description():
                 package="arduino",
                 executable="arduino_node",
                 name="arduino_node",
-                parameters=[{"port": "/dev/arduino", "baud_rate": 115200}],
+                parameters=[
+                    {
+                        "port": "/dev/arduino",
+                        "baud_rate": 115200,
+                        "enable_tf_broadcast": True,
+                        "base_frame": "base_link",
+                        "waypoint_frame": "waypoint",
+                        "status_frequency": 1.0,
+                        "wp_sensor_enable": True,
+                        "wp_sensor_analog": True,
+                        "wp_sensor_pin": 0,
+                        "wp_sensor_analog_threshold": 0.7,
+                    }
+                ],
                 output="screen",
             )
         ]

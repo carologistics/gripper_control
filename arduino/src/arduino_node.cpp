@@ -29,6 +29,10 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
       this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
           "diagnostics", 10);
 
+  // Register parameter callback (Add this before parameter declarations)
+  param_callback_ = this->add_on_set_parameters_callback(
+      std::bind(&ArduinoNode::parameterCallback, this, std::placeholders::_1));
+
   // Declare parameters
   declare_parameters();
 
@@ -180,8 +184,8 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     if (wp_sensed_) {
       geometry_msgs::msg::TransformStamped t;
       t.header.stamp = this->get_clock()->now();
-      t.header.frame_id = "base_link";
-      t.child_frame_id = "waypoint";
+      t.header.frame_id = config_.base_frame;    // Use configured frame
+      t.child_frame_id = config_.waypoint_frame; // Use configured frame
       t.transform.translation.x = 0.0;
       t.transform.translation.y = 0.0;
       t.transform.translation.z = 0.0;
