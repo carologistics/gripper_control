@@ -15,28 +15,41 @@
 #include "arduino/arduino_node.hpp"
 
 ArduinoNode::ArduinoNode() : Node("arduino_node") {
+  // Initialize CommStats at the start
+  comm_stats_.last_msg_time = std::chrono::steady_clock::now();
+  comm_stats_.bytes_received = 0;
+  comm_stats_.bytes_sent = 0;
+  comm_stats_.errors = 0;
+
+  // Initialize device state
+  device_state_ = DeviceState::DISCONNECTED;
+
+  // Create diagnostics publisher first
+  diagnostics_pub_ =
+      this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
+          "diagnostics", 10);
+
   // Declare parameters
   this->declare_parameter("port", "/dev/arduino");
   this->declare_parameter("baud_rate", 115200);
 
-  auto port = this->get_parameter("port").as_string();
-  auto baud_rate = this->get_parameter("baud_rate").as_int();
-
-  // Initialize serial port
   try {
+    auto port = this->get_parameter("port").as_string();
+    auto baud_rate = this->get_parameter("baud_rate").as_int();
+
     port_ = std::make_unique<SerialPort>(
         port,
         std::bind(&ArduinoNode::handle_serial_message, this,
                   std::placeholders::_1),
         std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
 
-    // Add this line to initialize the timestamp
-    comm_stats_.last_msg_time = std::chrono::steady_clock::now();
-
+    device_state_ = DeviceState::OPERATIONAL;
   } catch (const boost::system::system_error &e) {
     RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
                  e.what());
-    throw;
+    device_state_ = DeviceState::ERROR;
+    publish_diagnostics(); // Publish initial error state
+    // Don't throw - allow node to keep running for recovery attempts
   }
 
   // Initialize TF broadcaster
@@ -87,7 +100,10 @@ ArduinoNode::~ArduinoNode() { port_.reset(); }
 
 void ArduinoNode::timer_callback() {
   if (!port_) {
-    return; // Skip checks if no port
+    if (device_state_ != DeviceState::ERROR) {
+      handle_error("No serial port connection");
+    }
+    return;
   }
 
   try {
@@ -107,10 +123,14 @@ void ArduinoNode::timer_callback() {
     // Add watchdog functionality
     auto now = std::chrono::steady_clock::now();
     if ((now - comm_stats_.last_msg_time) > std::chrono::seconds(5)) {
-      handle_error("Communication timeout");
+      if (device_state_ == DeviceState::OPERATIONAL) {
+        handle_error("Communication timeout");
+        attempt_reconnect();
+      }
     }
   } catch (const std::exception &e) {
     RCLCPP_ERROR(this->get_logger(), "Timer callback error: %s", e.what());
+    handle_error(e.what());
   }
 }
 
