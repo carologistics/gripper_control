@@ -483,7 +483,8 @@ void ArduinoNode::handle_calibrate_accepted(
 void ArduinoNode::handle_get_status(
     const std::shared_ptr<arduino::srv::GetStatus::Request>,
     std::shared_ptr<arduino::srv::GetStatus::Response> response) {
-  response->connected = (port_ != nullptr);
+  response->connected =
+      (device_state_ == DeviceState::OPERATIONAL); // Changed from port_ check
   response->state = [this]() {
     switch (device_state_) {
     case DeviceState::DISCONNECTED:
