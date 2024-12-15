@@ -51,6 +51,12 @@ private:
   std::chrono::steady_clock::time_point last_reconnect_attempt_;
   const std::chrono::seconds reconnect_interval_{5};
 
+  // Add connection retry constants
+  static constexpr int MAX_CONNECT_RETRIES = 3;
+  static constexpr std::chrono::milliseconds CONNECT_RETRY_DELAY{1000};
+  static constexpr std::chrono::milliseconds DEVICE_INIT_DELAY{2000};
+  static constexpr std::chrono::seconds RESPONSE_TIMEOUT{2};
+
   void timer_callback();
   void handle_serial_message(const std::string &msg);
   void handle_disconnect();
