@@ -214,5 +214,10 @@ private:
   void check_action_timeouts();
   std::chrono::steady_clock::time_point last_feedback_time_;
   const std::chrono::seconds feedback_timeout_{5}; // 5 second timeout
+
+  // Add new helper functions for message handling
+  void parse_position_and_gripper(std::istringstream &iss);
+  void handle_goals_completed();
+  void handle_goals_error(); // Add this function too
 };
 #endif // ARDUINO_NODE_HPP

@@ -712,6 +712,23 @@ void ArduinoNode::handle_goals_completed() {
   }
 }
 
+void ArduinoNode::handle_goals_error() {
+  if (active_move_goal_) {
+    auto result = std::make_shared<MoveXYZ::Result>();
+    result->success = false;
+    result->message = "Motion error from Arduino";
+    active_move_goal_->abort(result);
+    active_move_goal_.reset();
+  }
+  if (active_gripper_goal_) {
+    auto result = std::make_shared<Gripper::Result>();
+    result->success = false;
+    result->message = "Motion error from Arduino";
+    active_gripper_goal_->abort(result);
+    active_gripper_goal_.reset();
+  }
+}
+
 int main(int argc, char **argv) {
 
   rclcpp::init(argc, argv);
