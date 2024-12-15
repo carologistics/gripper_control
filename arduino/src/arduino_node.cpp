@@ -251,12 +251,15 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     int received_checksum = std::stoi(msg.substr(plus_pos + 1));
     int calculated_checksum = 0;
     for (size_t i = 0; i < plus_pos; i++) {
-      calculated_checksum += msg[i];
+      calculated_checksum += static_cast<uint8_t>(
+          msg[i]); // Cast to uint8_t for proper byte handling
     }
-    calculated_checksum = (calculated_checksum + 128) % 256;
+    calculated_checksum = calculated_checksum & 0xFF; // Take lowest byte only
 
     if (calculated_checksum != received_checksum) {
-      RCLCPP_WARN(this->get_logger(), "Checksum mismatch!");
+      RCLCPP_WARN(this->get_logger(),
+                  "Checksum mismatch! Expected: %d, Got: %d", received_checksum,
+                  calculated_checksum);
       return;
     }
   }
