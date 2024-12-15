@@ -57,7 +57,7 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
 
     // Test communication
     device_state_ = DeviceState::INITIALIZING;
-    send_arduino_command("?"); // Send initial status request
+    send_arduino_command("S"); // Send initial status request
 
     // Wait briefly for response
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -213,7 +213,7 @@ void ArduinoNode::timer_callback() {
     }
 
     // Add periodic status request
-    send_arduino_command("?"); // Query device status periodically
+    send_arduino_command("S"); // Query device status periodically
 
     // Add watchdog functionality
     auto now = std::chrono::steady_clock::now();
