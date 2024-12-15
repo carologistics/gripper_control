@@ -17,6 +17,7 @@
 
 #include "arduino/action/calibrate.hpp"
 #include "arduino/action/home.hpp"
+#include "arduino/msg/status.hpp" // Add this include
 #include "arduino/serial_port.hpp"
 #include "arduino/srv/get_status.hpp"
 #include "arduino/srv/reset_device.hpp"
@@ -27,7 +28,6 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2_ros/transform_broadcaster.h"
-#include <diagnostic_updater/diagnostic_updater.hpp>
 
 #include <memory>
 #include <string>
@@ -115,6 +115,30 @@ private:
   };
   DeviceState device_state_{DeviceState::DISCONNECTED};
 
+  enum class ArduinoStatus {
+    IDLE = 0,
+    MOVING = 1,
+    ERROR_OUT_OF_RANGE_X = 2,
+    ERROR_OUT_OF_RANGE_Y = 3,
+    ERROR_OUT_OF_RANGE_Z = 4
+  };
+
+  ArduinoStatus arduino_status_{ArduinoStatus::IDLE};
+
+  struct Status {
+    float x_position{0.0f}; // Combined with old Position struct
+    float y_position{0.0f};
+    float z_position{0.0f};
+    bool gripper_closed{false};
+    float x_max{0.0f};
+    float y_max{0.0f};
+    float z_max{0.0f};
+    bool final{true};
+    uint32_t msgid{0};
+    uint32_t cmd_msgid{0}; // Track commands separately
+    uint32_t status{0};
+  } status_;
+
   // Service servers
   rclcpp::Service<arduino::srv::GetStatus>::SharedPtr get_status_service_;
   rclcpp::Service<arduino::srv::ResetDevice>::SharedPtr reset_device_service_;
@@ -126,5 +150,22 @@ private:
   void handle_reset_device(
       const std::shared_ptr<arduino::srv::ResetDevice::Request>,
       std::shared_ptr<arduino::srv::ResetDevice::Response> response);
+
+  // Status publisher
+  rclcpp::Publisher<arduino::msg::Status>::SharedPtr status_pub_;
+
+  // Add parameter declarations
+  void declare_parameters();
+
+  // Add config parameters
+  struct Config {
+    bool enable_tf_broadcast{true};
+    std::string base_frame{"base_link"};
+    std::string waypoint_frame{"waypoint"};
+    double status_frequency{1.0};
+  } config_;
+
+  // Add cleanup helper
+  void cleanup();
 };
 #endif // ARDUINO_NODE_HPP

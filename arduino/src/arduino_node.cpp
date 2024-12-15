@@ -30,8 +30,7 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
           "diagnostics", 10);
 
   // Declare parameters
-  this->declare_parameter("port", "/dev/arduino");
-  this->declare_parameter("baud_rate", 115200);
+  declare_parameters();
 
   try {
     auto port = this->get_parameter("port").as_string();
@@ -57,7 +56,8 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
 
   // Create timer for periodic checks
   timer_ = this->create_wall_timer(
-      std::chrono::seconds(1), std::bind(&ArduinoNode::timer_callback, this));
+      std::chrono::duration<double>(1.0 / config_.status_frequency),
+      std::bind(&ArduinoNode::timer_callback, this));
 
   RCLCPP_INFO(this->get_logger(), "Arduino node initialized");
 
@@ -94,9 +94,34 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
       "arduino/reset_device",
       std::bind(&ArduinoNode::handle_reset_device, this, std::placeholders::_1,
                 std::placeholders::_2));
+
+  // Create status publisher
+  status_pub_ =
+      this->create_publisher<arduino::msg::Status>("arduino/status", 10);
 }
 
-ArduinoNode::~ArduinoNode() { port_.reset(); }
+ArduinoNode::~ArduinoNode() { cleanup(); }
+
+void ArduinoNode::cleanup() {
+  // Stop all motion
+  handle_stop_command();
+
+  // Reset port
+  port_.reset();
+
+  // Clean up subscribers and publishers
+  cmd_vel_sub_.reset();
+  status_pub_.reset();
+  diagnostics_pub_.reset();
+
+  // Clean up services
+  get_status_service_.reset();
+  reset_device_service_.reset();
+
+  // Clean up action servers
+  home_action_server_.reset();
+  calibrate_action_server_.reset();
+}
 
 void ArduinoNode::timer_callback() {
   if (!port_) {
@@ -145,7 +170,8 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
   std::string type;
   iss >> type;
 
-  if (type == "W") { // Waypoint sensor data
+  if (type == "W" &&
+      config_.enable_tf_broadcast) { // Only broadcast TF if enabled
     int value;
     iss >> value;
     wp_sensed_ = value > 0;
@@ -176,6 +202,54 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
     }
     comm_stats_.last_msg_time = std::chrono::steady_clock::now();
   }
+
+  if (type == "P") { // Position update
+    iss >> status_.x_position >> status_.y_position >> status_.z_position;
+  } else if (type == "G") { // Gripper status
+    int closed;
+    iss >> closed;
+    status_.gripper_closed = (closed > 0);
+  } else if (type == "L") { // Limits
+    iss >> status_.x_max >> status_.y_max >> status_.z_max;
+  } else if (type == "M") { // Motion status
+    std::string motion_status;
+    iss >> motion_status;
+    status_.final = (motion_status == "IDLE");
+    if (motion_status == "MOVING") {
+      arduino_status_ = ArduinoStatus::MOVING;
+    } else if (motion_status == "ERROR_X") {
+      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_X;
+    } else if (motion_status == "ERROR_Y") {
+      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_Y;
+    } else if (motion_status == "ERROR_Z") {
+      arduino_status_ = ArduinoStatus::ERROR_OUT_OF_RANGE_Z;
+    } else {
+      arduino_status_ = ArduinoStatus::IDLE;
+    }
+    status_.status = static_cast<uint32_t>(arduino_status_);
+  }
+
+  // Increment message ID for commands
+  if (type == "M" || type == "H" || type == "C" || type == "D") {
+    status_.cmd_msgid++;
+  }
+  status_.msgid++;
+
+  // Publish current status
+  auto status_msg = arduino::msg::Status();
+  status_msg.x_position = status_.x_position;
+  status_msg.y_position = status_.y_position;
+  status_msg.z_position = status_.z_position;
+  status_msg.gripper_closed = status_.gripper_closed;
+  status_msg.wp_sensed = wp_sensed_;
+  status_msg.x_max = status_.x_max;
+  status_msg.y_max = status_.y_max;
+  status_msg.z_max = status_.z_max;
+  status_msg.final = status_.final;
+  status_msg.msgid = status_.msgid;
+  status_msg.status = status_.status;
+
+  status_pub_->publish(status_msg);
 }
 
 void ArduinoNode::handle_disconnect() {
@@ -224,7 +298,10 @@ void ArduinoNode::handle_stop_command() { send_arduino_command("S"); }
 
 void ArduinoNode::send_arduino_command(const std::string &cmd) {
   if (port_) {
-    port_->write("AT " + cmd + "+"); // Add AT prefix and + suffix
+    std::string full_cmd = "AT " + cmd + "+";
+    if (port_->write(full_cmd)) {
+      comm_stats_.bytes_sent += full_cmd.length();
+    }
   }
 }
 
@@ -407,6 +484,32 @@ rcl_interfaces::msg::SetParametersResult ArduinoNode::parameterCallback(
   }
 
   return result;
+}
+
+void ArduinoNode::declare_parameters() {
+  // Device parameters
+  this->declare_parameter("port", "/dev/arduino");
+  this->declare_parameter("baud_rate", 115200);
+
+  // Waypoint sensor parameters
+  this->declare_parameter("wp_sensor_enable", true);
+  this->declare_parameter("wp_sensor_analog", true);
+  this->declare_parameter("wp_sensor_pin", 0);
+  this->declare_parameter("wp_sensor_analog_threshold", 0.7);
+
+  // Configuration parameters
+  this->declare_parameter("enable_tf_broadcast", config_.enable_tf_broadcast);
+  this->declare_parameter("base_frame", config_.base_frame);
+  this->declare_parameter("waypoint_frame", config_.waypoint_frame);
+  this->declare_parameter("status_frequency", config_.status_frequency);
+
+  // Get configuration
+  config_.enable_tf_broadcast =
+      this->get_parameter("enable_tf_broadcast").as_bool();
+  config_.base_frame = this->get_parameter("base_frame").as_string();
+  config_.waypoint_frame = this->get_parameter("waypoint_frame").as_string();
+  config_.status_frequency =
+      this->get_parameter("status_frequency").as_double();
 }
 
 int main(int argc, char **argv) {

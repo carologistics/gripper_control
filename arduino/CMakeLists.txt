@@ -25,11 +25,15 @@ include_directories(
 
 # Generate interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "action/Home.action"
-  "action/Calibrate.action"
+  "msg/Status.msg"
   "srv/GetStatus.srv"
   "srv/ResetDevice.srv"
+  "action/Home.action"
+  "action/Calibrate.action"
 )
+
+# Create a target for the generated interfaces
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 # Arduino node
 add_executable(arduino_node
@@ -37,7 +41,11 @@ add_executable(arduino_node
   src/serial_port.cpp
 )
 
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+# Ensure the node can find its own messages
+target_include_directories(arduino_node PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
+)
 
 ament_target_dependencies(arduino_node
   rclcpp
