@@ -1,0 +1,7 @@
+.cmake-format
+.cmakelint.py
+.config.yaml
+.gitlint
+.pre-commit-config.yaml
+*.swp
+.LICENSE
