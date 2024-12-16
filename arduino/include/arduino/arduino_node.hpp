@@ -19,6 +19,7 @@
 #include "arduino/action/gripper.hpp"
 #include "arduino/action/home.hpp"
 #include "arduino/action/move_xyz.hpp"
+#include "arduino/commands.h" // Add this include
 #include "arduino/msg/status.hpp"
 #include "arduino/serial_port.hpp"
 #include "arduino/srv/get_status.hpp"

@@ -213,7 +213,7 @@ void ArduinoNode::timer_callback() {
     }
 
     // Add periodic status request
-    send_arduino_command("S"); // Query device status periodically
+    send_arduino_command(CMD_STATUS_REQ); // Replace "S" with CMD_STATUS_REQ
 
     // Add watchdog functionality
     auto now = std::chrono::steady_clock::now();
@@ -339,14 +339,14 @@ void ArduinoNode::handle_move_command(float linear_x, float angular_z) {
   // Convert velocity commands to position increments
   // and use X, Y commands instead
   std::stringstream cmd_x, cmd_y;
-  cmd_x << "X" << linear_x;
-  cmd_y << "Y" << angular_z;
+  cmd_x << CMD_X_NEW_POS << linear_x;  // Replace "X" with CMD_X_NEW_POS
+  cmd_y << CMD_Y_NEW_POS << angular_z; // Replace "Y" with CMD_Y_NEW_POS
   send_arduino_command(cmd_x.str());
   send_arduino_command(cmd_y.str());
 }
 
 void ArduinoNode::handle_stop_command() {
-  send_arduino_command("."); // Use correct stop command from commands.h
+  send_arduino_command(std::string(1, CMD_STOP)); // Replace "." with CMD_STOP
 }
 
 void ArduinoNode::send_arduino_command(const std::string &cmd) {
@@ -373,7 +373,8 @@ rclcpp_action::CancelResponse ArduinoNode::handle_home_cancel(
 
 void ArduinoNode::handle_home_accepted(
     std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> goal_handle) {
-  send_arduino_command("H");
+  send_arduino_command(
+      std::string(1, CMD_CALIBRATE)); // Replace "H" with CMD_CALIBRATE
   auto result = std::make_shared<Home::Result>();
   result->success = true;
   result->message = "Homing completed";
@@ -396,7 +397,8 @@ void ArduinoNode::handle_calibrate_accepted(
     std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>> goal_handle) {
   auto goal = goal_handle->get_goal();
   // Use correct calibrate commands from commands.h
-  send_arduino_command(goal->double_calibrate ? "c" : "C");
+  send_arduino_command(std::string(
+      1, goal->double_calibrate ? CMD_DOUBLE_CALIBRATE : CMD_CALIBRATE));
 
   auto result = std::make_shared<Calibrate::Result>();
   result->success = true;
@@ -594,9 +596,9 @@ void ArduinoNode::execute_move_xyz(
 
   // Send separate X, Y, Z commands according to protocol
   std::stringstream cmd_x, cmd_y, cmd_z;
-  cmd_x << "X" << goal->x;
-  cmd_y << "Y" << goal->y;
-  cmd_z << "Z" << goal->z;
+  cmd_x << CMD_X_NEW_POS << goal->x; // Replace "X" with CMD_X_NEW_POS
+  cmd_y << CMD_Y_NEW_POS << goal->y; // Replace "Y" with CMD_Y_NEW_POS
+  cmd_z << CMD_Z_NEW_POS << goal->z; // Replace "Z" with CMD_Z_NEW_POS
 
   send_arduino_command(cmd_x.str());
   send_arduino_command(cmd_y.str());
@@ -608,7 +610,9 @@ void ArduinoNode::execute_gripper(
   const auto goal = goal_handle->get_goal();
   active_gripper_goal_ = goal_handle;
 
-  send_arduino_command(goal->close ? "G" : "O");
+  send_arduino_command(std::string(
+      1, goal->close ? CMD_CLOSE
+                     : CMD_OPEN)); // Replace "G"/"O" with CMD_CLOSE/CMD_OPEN
 }
 
 // Add action server handlers
