@@ -43,66 +43,39 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
 
     // Check if device exists
     if (access(port.c_str(), F_OK) == -1) {
-      RCLCPP_ERROR(this->get_logger(), "Device file does not exist: %s",
-                   port.c_str());
-      device_state_ = DeviceState::ERROR;
-      return;
+      throw SerialPortError("Device file does not exist: " + port);
     }
 
     RCLCPP_INFO(this->get_logger(), "Attempting to connect to %s at %ld baud",
                 port.c_str(), baud_rate);
 
-    // Attempt initial connection with retries
-    int connect_retries = 0;
-    const int MAX_CONNECT_RETRIES = 3;
-    bool connected = false;
+    port_ = std::make_unique<SerialPort>(
+        port,
+        std::bind(&ArduinoNode::handle_serial_message, this,
+                  std::placeholders::_1),
+        std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
 
-    while (!connected && connect_retries < MAX_CONNECT_RETRIES) {
-      try {
-        port_ = std::make_unique<SerialPort>(
-            port,
-            std::bind(&ArduinoNode::handle_serial_message, this,
-                      std::placeholders::_1),
-            std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
+    // Test communication
+    device_state_ = DeviceState::INITIALIZING;
+    send_arduino_command("S"); // Send initial status request
 
-        // Wait for device to initialize
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    // Wait briefly for response
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        // Test communication
-        device_state_ = DeviceState::INITIALIZING;
-        send_arduino_command("S"); // Send initial status request
-
-        // Wait for response with timeout
-        auto wait_start = std::chrono::steady_clock::now();
-        while (device_state_ == DeviceState::INITIALIZING) {
-          if (std::chrono::steady_clock::now() - wait_start >
-              std::chrono::seconds(2)) {
-            throw SerialPortError("No response from device");
-          }
-          std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-
-        connected = true;
-        RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino");
-
-      } catch (const std::exception &e) {
-        connect_retries++;
-        RCLCPP_WARN(this->get_logger(), "Connection attempt %d failed: %s",
-                    connect_retries, e.what());
-        port_.reset();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-      }
+    if (device_state_ == DeviceState::INITIALIZING) {
+      throw SerialPortError("No response from device");
     }
 
-    if (!connected) {
-      throw SerialPortError(
-          "Failed to establish connection after maximum retries");
-    }
-
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to initialize Arduino: %s",
+    RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino");
+  } catch (const SerialPortError &e) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
                  e.what());
-    device_state_ = DeviceState::ERROR;
+    device_state_ = DeviceState::DISCONNECTED;
+    // Don't rethrow - allow node to keep running
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(this->get_logger(), "Unexpected error: %s", e.what());
+    device_state_ = DeviceState::DISCONNECTED;
+    // Don't rethrow - allow node to keep running
   }
 
   // Initialize TF broadcaster
@@ -330,6 +303,7 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
 
 void ArduinoNode::handle_disconnect() {
   RCLCPP_WARN(this->get_logger(), "Serial port disconnected");
+  // Handle reconnection logic here
   // Try to reconnect every 5 seconds
   while (rclcpp::ok()) {
     try {
