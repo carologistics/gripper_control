@@ -77,7 +77,21 @@ install(DIRECTORY
   launch
   action
   msg        # Add msg directory to installation
+  include/arduino  # Add include/arduino directory
   DESTINATION share/${PROJECT_NAME}
+)
+
+# Add installation of the commands.h header to the include directory structure
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/ArduinoSketch/commands.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/arduino/commands.h
+  COPYONLY
+)
+
+# Add this new section to install headers
+install(FILES
+  ArduinoSketch/commands.h
+  DESTINATION include/${PROJECT_NAME}
 )
 
 ament_package()

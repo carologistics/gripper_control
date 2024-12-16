@@ -19,11 +19,11 @@
 #include "arduino/action/gripper.hpp"
 #include "arduino/action/home.hpp"
 #include "arduino/action/move_xyz.hpp"
-#include "arduino/commands.h" // Add this include
 #include "arduino/msg/status.hpp"
 #include "arduino/serial_port.hpp"
 #include "arduino/srv/get_status.hpp"
 #include "arduino/srv/reset_device.hpp"
+#include "commands.h" // Update to use local include path
 #include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -100,7 +100,8 @@ private:
   // Command handlers
   void handle_move_command(float linear_x, float angular_z);
   void handle_stop_command();
-  void send_arduino_command(const std::string &cmd);
+  void send_arduino_command(char cmd);
+  void send_command_with_value(char cmd, float value);
 
   OnSetParametersCallbackHandle::SharedPtr param_callback_;
   rcl_interfaces::msg::SetParametersResult
@@ -192,7 +193,6 @@ private:
       active_gripper_goal_;
 
   // Add helper methods for goal handling
-  void check_goal_progress();
   void publish_move_xyz_feedback();
   void publish_gripper_feedback();
 
