@@ -12,8 +12,8 @@ void setup() {
   // Set the CS pin to high
   pinMode(PIN_SPI_SS, OUTPUT);
   digitalWrite(PIN_SPI_SS, HIGH);
-  Ethernet.setSS(PIN_SPI_SS);
-  Ethernet.initSS();
+  // Ethernet.setSS(PIN_SPI_SS);
+  // Ethernet.initSS();
   // Start the Ethernet connection and the server
   Ethernet.begin(mac, ip);
   server.begin();
