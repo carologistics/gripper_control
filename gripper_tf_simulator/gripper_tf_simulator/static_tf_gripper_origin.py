@@ -17,11 +17,11 @@ class FixedFrameBroadcaster(Node):
        t = TransformStamped()
 
        t.header.stamp = self.get_clock().now().to_msg()
-       t.header.frame_id = 'gripper_y_dyn'
-       t.child_frame_id = 'gripper_x_origin'
-       t.transform.translation.x = 0.8125
-       t.transform.translation.y = 0.54
-       t.transform.translation.z = -0.18
+       t.header.frame_id = 'base_link'
+       t.child_frame_id = 'gripper_z_origin'
+       t.transform.translation.x = 0.0
+       t.transform.translation.y = 0.0
+       t.transform.translation.z = 2.5
        t.transform.rotation.x = 0.0
        t.transform.rotation.y = 0.0
        t.transform.rotation.z = 0.0
@@ -33,10 +33,10 @@ class FixedFrameBroadcaster(Node):
 
        t2.header.stamp = self.get_clock().now().to_msg()
        t2.header.frame_id = 'gripper_z_dyn'
-       t2.child_frame_id = 'gripper_y_origin'
-       t2.transform.translation.x = -0.1325
-       t2.transform.translation.y = 0.0
-       t2.transform.translation.z = 0.65
+       t2.child_frame_id = 'gripper_yaw_origin'
+       t2.transform.translation.x = 0.0
+       t2.transform.translation.y = 0.05
+       t2.transform.translation.z = 0.0
        t2.transform.rotation.x = 0.0
        t2.transform.rotation.y = 0.0
        t2.transform.rotation.z = 0.0
@@ -46,11 +46,11 @@ class FixedFrameBroadcaster(Node):
        t3 = TransformStamped()
 
        t3.header.stamp = self.get_clock().now().to_msg()
-       t3.header.frame_id = 'base_link'
-       t3.child_frame_id = 'gripper_z_origin'
-       t3.transform.translation.x = 0.245
+       t3.header.frame_id = 'gripper_yaw'
+       t3.child_frame_id = 'gripper_x_origin'
+       t3.transform.translation.x = 0.0
        t3.transform.translation.y = 0.0
-       t3.transform.translation.z = 2.5
+       t3.transform.translation.z = 2.0
        t3.transform.rotation.x = 0.0
        t3.transform.rotation.y = 0.0
        t3.transform.rotation.z = 0.0
@@ -65,7 +65,7 @@ class FixedFrameBroadcaster(Node):
        t4.child_frame_id = 'gripper_final'
        t4.transform.translation.x = 0.46528
        t4.transform.translation.y = 0.0
-       t4.transform.translation.z = -0.405
+       t4.transform.translation.z = 0.0
        t4.transform.rotation.x = 0.0
        t4.transform.rotation.y = 0.0
        t4.transform.rotation.z = 0.0
@@ -73,80 +73,9 @@ class FixedFrameBroadcaster(Node):
 
        self.tf_broadcaster.sendTransform(t4)
 
-    #    t5 = TransformStamped()
 
-    #    t5.header.stamp = self.get_clock().now().to_msg()
-    #    t5.header.frame_id = 'base_link'
-    #    t5.child_frame_id = 'machine_link'
-    #    t5.transform.translation.x = -0.350
-    #    t5.transform.translation.y = 0.175
-    #    t5.transform.translation.z = 0.0
-    #    t5.transform.rotation.x = 0.0
-    #    t5.transform.rotation.y = 0.0
-    #    t5.transform.rotation.z = 1.570795
-    #    t5.transform.rotation.w = 1.0
 
-    #    self.tf_broadcaster.sendTransform(t5)
 
-    #    t6 = TransformStamped()
-
-    #    t6.header.stamp = self.get_clock().now().to_msg()
-    #    t6.header.frame_id = 'gripper_y_dyn'
-    #    t6.child_frame_id = 'plate_top'
-    #    t6.transform.translation.x = 0.0
-    #    t6.transform.translation.y = 0.0
-    #    t6.transform.translation.z = 0.1
-    #    t6.transform.rotation.x = 0.0
-    #    t6.transform.rotation.y = 0.0
-    #    t6.transform.rotation.z = 0.0
-    #    t6.transform.rotation.w = 1.0
-
-    #    self.tf_broadcaster.sendTransform(t6)
-
-    #    t7 = TransformStamped()
-
-    #    t7.header.stamp = self.get_clock().now().to_msg()
-    #    t7.header.frame_id = 'base_link'
-    #    t7.child_frame_id = 'front_laser'
-    #    t7.transform.translation.x = 0.094
-    #    t7.transform.translation.y = 0.0
-    #    t7.transform.translation.z = 0.239
-    #    t7.transform.rotation.x = 3.1415
-    #    t7.transform.rotation.y = 0.0
-    #    t7.transform.rotation.z = 0.0
-    #    t7.transform.rotation.w = 0.0
-
-    #    self.tf_broadcaster.sendTransform(t7)
-
-    #    t8 = TransformStamped()
-
-    #    t8.header.stamp = self.get_clock().now().to_msg()
-    #    t8.header.frame_id = 'plate_top'
-    #    t8.child_frame_id = 'end_effector_home'
-    #    t8.transform.translation.x = 0.139028
-    #    t8.transform.translation.y = 0.054
-    #    t8.transform.translation.z = 0.105
-    #    t8.transform.rotation.x = 0.0
-    #    t8.transform.rotation.y = 0.0
-    #    t8.transform.rotation.z = 0.0
-    #    t8.transform.rotation.w = 1.0
-
-    #    self.tf_broadcaster.sendTransform(t8)
-
-    #    t9 = TransformStamped()
-
-    #    t9.header.stamp = self.get_clock().now().to_msg()
-    #    t9.header.frame_id = 'base_link'
-    #    t9.child_frame_id = 'cam_tag'
-    #    t9.transform.translation.x = 0.0546
-    #    t9.transform.translation.y = 0.0
-    #    t9.transform.translation.z = 0.4675
-    #    t9.transform.rotation.x = -1.57079632679
-    #    t9.transform.rotation.y = 0.0
-    #    t9.transform.rotation.z = -1.57079632679
-    #    t9.transform.rotation.w = 0.0
-
-    #    self.tf_broadcaster.sendTransform(t9)
 
 
 def main():

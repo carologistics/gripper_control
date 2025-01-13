@@ -63,8 +63,8 @@ def main(args=None):
     action_client = GripperActionClient()
     try:
         # Set the desired target position and frame
-        x_target = 2.0
-        y_target = 5.0
+        x_target = -2.0
+        y_target = 4.0
         z_target = 3.0
         frame = 'gripper_final'
 

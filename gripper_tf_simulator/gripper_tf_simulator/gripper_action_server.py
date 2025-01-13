@@ -1,7 +1,7 @@
 import rclpy
 import threading
 import collections
-
+import math
 import time
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
@@ -82,34 +82,40 @@ class GripperActionServer(Node):
                     f"Relative orientation (base_link -> goal_handle.request.frame): "
                     f"End-effector orientation: x={orientation.x}, y={orientation.y}, z={orientation.z}, w={orientation.w}"
                 )
+
                 feedback_msg.position_x = goal_handle.request.x_target - current_position.x
                 feedback_msg.position_y = goal_handle.request.y_target - current_position.y
                 feedback_msg.position_z = goal_handle.request.z_target - current_position.z
-                # feedback_msg.x_angle = goal_handle.request.raw_target - orientation.x
-                # feedback_msg.y_angle = goal_handle.request.pitch_target - orientation.y
-                # feedback_msg.z_angle = goal_handle.request.yaw_target - orientation.z
-                # feedback_msg.w_angle = goal_handle.request.qua_target - orientation.w
+                current_yaw = math.atan2(
+                2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+                1.0 - 2.0 * (orientation.y ** 2 + orientation.z ** 2)
+                )
+                target_yaw = math.atan2(goal_handle.request.y_target, goal_handle.request.x_target)
+                z_angle = target_yaw - current_yaw
                 goal_handle.publish_feedback(feedback_msg)
 
+                self.get_logger().info(f"z_angle in degrees: {z_angle}")
                 # Compute velocity
                 cmd_vel = Twist()
-                cmd_vel.linear.x = 3 * feedback_msg.position_x
-                cmd_vel.linear.y = 3 * feedback_msg.position_y
-                cmd_vel.linear.z = 3 * feedback_msg.position_z
+                if goal_handle.request.x_target <0 :
+                    cmd_vel.linear.x = -1 * feedback_msg.position_x
+                else:
+                    cmd_vel.linear.x = 1 * feedback_msg.position_x    
+                cmd_vel.linear.z = 1 * feedback_msg.position_z
+                cmd_vel.angular.z = 4.0 * z_angle
+
 
                 # Check if the target position is reached (within a small tolerance)
-                tolerance = 0.01  # Define your tolerance
+                tolerance = 0.1  # Define your tolerance
                 if (abs(feedback_msg.position_x) <= tolerance and
                     abs(feedback_msg.position_y) <= tolerance and
-                    abs(feedback_msg.position_z) <= tolerance):
+                    abs(z_angle) <= tolerance and
+                    abs(feedback_msg.position_z) <= tolerance ):
                     target_reached = True
                     self.feedback_timer.cancel()
 
                     # Stop the robot by publishing zero velocities
                     stop_cmd_vel = Twist()
-                    stop_cmd_vel.linear.x = 0.0
-                    stop_cmd_vel.linear.y = 0.0
-                    stop_cmd_vel.linear.z = 0.0
                     self.cmd_vel_publisher.publish(stop_cmd_vel)
             
                     goal_handle.succeed()
@@ -118,7 +124,10 @@ class GripperActionServer(Node):
                     result = Gripper.Result()
                     result.success = True
                     return result
-
+                self.get_logger().info(
+                    f"Publishing velocities: x={cmd_vel.linear.x}, y={cmd_vel.linear.y}, z={cmd_vel.linear.z}"
+                    f"Publishing pos: x={feedback_msg.position_x}, y={feedback_msg.position_x}, z={feedback_msg.position_x}"
+                )
 
                 # Publish the command velocity
                 self.cmd_vel_publisher.publish(cmd_vel)
