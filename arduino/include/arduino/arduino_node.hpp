@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Carologistics
+// Copyright (c) 2024-2025 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,14 @@
 #include "arduino/serial_port.hpp"
 #include "arduino/srv/get_status.hpp"
 #include "arduino/srv/reset_device.hpp"
-#include "commands.h" // Update to use local include path
+#include "commands.h"
 #include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "tf2_ros/transform_broadcaster.h"
+#include <boost/asio.hpp>
 
 #include <memory>
 #include <string>
@@ -79,7 +80,6 @@ private:
   // Movement control
   void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
 
-  std::unique_ptr<SerialPort> port_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   bool wp_sensed_ = false;
@@ -220,5 +220,9 @@ private:
   void parse_position_and_gripper(std::istringstream &iss);
   void handle_goals_completed();
   void handle_goals_error(); // Add this function too
+
+  // Ethernet communication
+  boost::asio::io_context io_context_;
+  boost::asio::ip::tcp::socket socket_;
 };
 #endif // ARDUINO_NODE_HPP

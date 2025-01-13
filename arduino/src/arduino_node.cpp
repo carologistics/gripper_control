@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Carologistics
+// Copyright (c) 2025 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include "arduino/arduino_node.hpp"
+#include "commands.h"
+#include <boost/asio.hpp>
 
-ArduinoNode::ArduinoNode() : Node("arduino_node") {
+ArduinoNode::ArduinoNode()
+    : Node("arduino_node"), io_context_(), socket_(io_context_) {
   // Initialize CommStats at the start
   comm_stats_.last_msg_time = std::chrono::steady_clock::now();
   comm_stats_.bytes_received = 0;
@@ -38,44 +41,39 @@ ArduinoNode::ArduinoNode() : Node("arduino_node") {
   declare_parameters();
 
   try {
-    auto port = this->get_parameter("port").as_string();
-    auto baud_rate = this->get_parameter("baud_rate").as_int();
+    auto ip_address = this->get_parameter("ip_address").as_string();
+    auto port = this->get_parameter("port").as_int();
 
-    // Check if device exists
-    if (access(port.c_str(), F_OK) == -1) {
-      throw SerialPortError("Device file does not exist: " + port);
-    }
+    RCLCPP_INFO(this->get_logger(),
+                "Attempting to connect to Arduino Giga at %s:%ld",
+                ip_address.c_str(), port);
 
-    RCLCPP_INFO(this->get_logger(), "Attempting to connect to %s at %ld baud",
-                port.c_str(), baud_rate);
+    // Connect to Arduino Giga over Ethernet
+    boost::asio::ip::tcp::resolver resolver(io_context_);
+    boost::asio::ip::tcp::resolver::results_type endpoints =
+        resolver.resolve(ip_address, std::to_string(port));
+    boost::asio::connect(socket_, endpoints);
 
-    port_ = std::make_unique<SerialPort>(
-        port,
-        std::bind(&ArduinoNode::handle_serial_message, this,
-                  std::placeholders::_1),
-        std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
+    RCLCPP_INFO(this->get_logger(),
+                "Successfully connected to Arduino Giga at %s:%ld",
+                ip_address.c_str(), port);
 
     // Test communication
     device_state_ = DeviceState::INITIALIZING;
-    send_arduino_command(CMD_STATUS_REQ); // Changed from "S" to CMD_STATUS_REQ
+    send_arduino_command(CMD_STATUS_REQ);
 
     // Wait briefly for response
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     if (device_state_ == DeviceState::INITIALIZING) {
-      throw SerialPortError("No response from device");
+      throw std::runtime_error("No response from device");
     }
 
-    RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino");
-  } catch (const SerialPortError &e) {
-    RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: %s",
+    RCLCPP_INFO(this->get_logger(), "Successfully connected to Arduino Giga");
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to connect to Arduino Giga: %s",
                  e.what());
     device_state_ = DeviceState::DISCONNECTED;
-    // Don't rethrow - allow node to keep running
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR(this->get_logger(), "Unexpected error: %s", e.what());
-    device_state_ = DeviceState::DISCONNECTED;
-    // Don't rethrow - allow node to keep running
   }
 
   // Initialize TF broadcaster
@@ -154,8 +152,8 @@ void ArduinoNode::cleanup() {
   // Stop all motion
   handle_stop_command();
 
-  // Reset port
-  port_.reset();
+  // Reset socket
+  socket_.close();
 
   // Clean up subscribers and publishers
   cmd_vel_sub_.reset();
@@ -190,7 +188,7 @@ void ArduinoNode::cleanup() {
 }
 
 void ArduinoNode::timer_callback() {
-  if (!port_) {
+  if (!socket_.is_open()) {
     auto now = std::chrono::steady_clock::now();
     if (now - last_reconnect_attempt_ > reconnect_interval_) {
       last_reconnect_attempt_ = now;
@@ -204,23 +202,22 @@ void ArduinoNode::timer_callback() {
   try {
     // Check if waypoint sensor is enabled
     if (wp_sensor_enable_) {
-      // Handle waypoint sensor commands through direct port write since it has
-      // a special format
+
       std::stringstream cmd;
       cmd << "R " << (wp_sensor_analog_ ? "A" : "D") << " " << wp_sensor_pin_;
       if (wp_sensor_analog_) {
         cmd << " " << wp_sensor_analog_threshold_;
       }
-      if (port_) {
-        std::string full_cmd = std::string(AT) + cmd.str() + TERMINATOR;
-        if (port_->write(full_cmd)) {
-          comm_stats_.bytes_sent += full_cmd.length();
-        }
+      if (socket_.is_open()) {
+        std::string full_cmd =
+            std::string(1, AT) + cmd.str() + std::string(1, TERMINATOR);
+        boost::asio::write(socket_, boost::asio::buffer(full_cmd));
+        comm_stats_.bytes_sent += full_cmd.length();
       }
     }
 
     // Add periodic status request
-    send_arduino_command(CMD_STATUS_REQ); // Changed from "S" to CMD_STATUS_REQ
+    send_arduino_command(CMD_STATUS_REQ);
 
     // Add watchdog functionality
     auto now = std::chrono::steady_clock::now();
@@ -251,25 +248,6 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
   std::istringstream iss(msg);
   std::string type;
   iss >> type;
-
-  // Add checksum verification
-  size_t plus_pos = msg.find_last_of('+');
-  if (plus_pos != std::string::npos && plus_pos < msg.length() - 1) {
-    int received_checksum = std::stoi(msg.substr(plus_pos + 1));
-    int calculated_checksum = 0;
-    for (size_t i = 0; i < plus_pos; i++) {
-      calculated_checksum += static_cast<uint8_t>(
-          msg[i]); // Cast to uint8_t for proper byte handling
-    }
-    calculated_checksum = calculated_checksum & 0xFF; // Take lowest byte only
-
-    if (calculated_checksum != received_checksum) {
-      RCLCPP_WARN(this->get_logger(),
-                  "Checksum mismatch! Expected: %d, Got: %d", received_checksum,
-                  calculated_checksum);
-      return;
-    }
-  }
 
   if (type == "M") { // Moving
     arduino_status_ = ArduinoStatus::MOVING;
@@ -309,24 +287,24 @@ void ArduinoNode::handle_serial_message(const std::string &msg) {
 }
 
 void ArduinoNode::handle_disconnect() {
-  RCLCPP_WARN(this->get_logger(), "Serial port disconnected");
+  RCLCPP_WARN(this->get_logger(), "Ethernet connection lost");
   // Handle reconnection logic here
   // Try to reconnect every 5 seconds
   while (rclcpp::ok()) {
     try {
-      auto port = this->get_parameter("port").as_string();
-      auto baud_rate = this->get_parameter("baud_rate").as_int();
+      auto ip_address = this->get_parameter("ip_address").as_string();
+      auto port = this->get_parameter("port").as_int();
 
-      port_ = std::make_unique<SerialPort>(
-          port,
-          std::bind(&ArduinoNode::handle_serial_message, this,
-                    std::placeholders::_1),
-          std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
+      boost::asio::ip::tcp::resolver resolver(io_context_);
+      boost::asio::ip::tcp::resolver::results_type endpoints =
+          resolver.resolve(ip_address, std::to_string(port));
+      boost::asio::connect(socket_, endpoints);
 
       RCLCPP_INFO(this->get_logger(),
-                  "Successfully reconnected to serial port");
+                  "Successfully reconnected to Arduino Giga at %s:%ld",
+                  ip_address.c_str(), port);
       return;
-    } catch (const boost::system::system_error &e) {
+    } catch (const std::exception &e) {
       RCLCPP_ERROR(this->get_logger(), "Reconnection failed: %s", e.what());
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
@@ -347,25 +325,22 @@ void ArduinoNode::handle_move_command(float linear_x, float angular_z) {
   send_command_with_value(CMD_Y_NEW_POS, angular_z);
 }
 
-// Remove the string version of send_arduino_command
-
 void ArduinoNode::send_arduino_command(char cmd) {
-  if (port_) {
-    std::string full_cmd = std::string(AT) + cmd + TERMINATOR;
-    if (port_->write(full_cmd)) {
-      comm_stats_.bytes_sent += full_cmd.length();
-    }
+  if (socket_.is_open()) {
+    std::string full_cmd =
+        std::string(1, AT) + cmd + std::string(1, TERMINATOR);
+    boost::asio::write(socket_, boost::asio::buffer(full_cmd));
+    comm_stats_.bytes_sent += full_cmd.length();
   }
 }
 
 // Helper method to send command with value
 void ArduinoNode::send_command_with_value(char cmd, float value) {
-  if (port_) {
-    std::string full_cmd =
-        std::string(AT) + cmd + std::to_string(value) + TERMINATOR;
-    if (port_->write(full_cmd)) {
-      comm_stats_.bytes_sent += full_cmd.length();
-    }
+  if (socket_.is_open()) {
+    std::string full_cmd = std::string(1, AT) + cmd + std::to_string(value) +
+                           std::string(1, TERMINATOR);
+    boost::asio::write(socket_, boost::asio::buffer(full_cmd));
+    comm_stats_.bytes_sent += full_cmd.length();
   }
 }
 
@@ -444,7 +419,7 @@ void ArduinoNode::handle_get_status(
 void ArduinoNode::handle_reset_device(
     const std::shared_ptr<arduino::srv::ResetDevice::Request>,
     std::shared_ptr<arduino::srv::ResetDevice::Response> response) {
-  port_.reset();
+  socket_.close();
   retry_count_ = 0;
 
   if (attempt_reconnect()) {
@@ -463,19 +438,18 @@ bool ArduinoNode::attempt_reconnect() {
   }
 
   try {
-    auto port = this->get_parameter("port").as_string();
-    auto baud_rate = this->get_parameter("baud_rate").as_int();
+    auto ip_address = this->get_parameter("ip_address").as_string();
+    auto port = this->get_parameter("port").as_int();
 
-    port_ = std::make_unique<SerialPort>(
-        port,
-        std::bind(&ArduinoNode::handle_serial_message, this,
-                  std::placeholders::_1),
-        std::bind(&ArduinoNode::handle_disconnect, this), baud_rate);
+    boost::asio::ip::tcp::resolver resolver(io_context_);
+    boost::asio::ip::tcp::resolver::results_type endpoints =
+        resolver.resolve(ip_address, std::to_string(port));
+    boost::asio::connect(socket_, endpoints);
 
     device_state_ = DeviceState::OPERATIONAL;
     retry_count_ = 0;
     return true;
-  } catch (const boost::system::system_error &e) {
+  } catch (const std::exception &e) {
     retry_count_++;
     return false;
   }
@@ -494,7 +468,6 @@ void ArduinoNode::publish_diagnostics() {
 
   diagnostic_msgs::msg::DiagnosticStatus status;
   status.name = "Arduino Device";
-  status.hardware_id = this->get_parameter("port").as_string();
 
   if (device_state_ == DeviceState::OPERATIONAL) {
     status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
@@ -529,6 +502,9 @@ void ArduinoNode::publish_diagnostics() {
 
   diag_msg.status.push_back(status);
   diagnostics_pub_->publish(diag_msg);
+
+  RCLCPP_INFO(this->get_logger(), "Published diagnostics: %s",
+              kv.value.c_str());
 }
 
 rcl_interfaces::msg::SetParametersResult ArduinoNode::parameterCallback(
@@ -552,9 +528,9 @@ rcl_interfaces::msg::SetParametersResult ArduinoNode::parameterCallback(
 }
 
 void ArduinoNode::declare_parameters() {
-  // Device parameters
-  this->declare_parameter("port", "/dev/arduino");
-  this->declare_parameter("baud_rate", 115200);
+  // Remove device parameters
+  // this->declare_parameter("port", "/dev/arduino");
+  // this->declare_parameter("baud_rate", 115200);
 
   // Waypoint sensor parameters
   this->declare_parameter("wp_sensor_enable", true);
@@ -567,6 +543,10 @@ void ArduinoNode::declare_parameters() {
   this->declare_parameter("base_frame", config_.base_frame);
   this->declare_parameter("waypoint_frame", config_.waypoint_frame);
   this->declare_parameter("status_frequency", config_.status_frequency);
+
+  // Ethernet parameters
+  this->declare_parameter("ip_address", "192.168.1.100");
+  this->declare_parameter("port", 12345);
 
   // Get configuration
   config_.enable_tf_broadcast =
@@ -585,6 +565,8 @@ void ArduinoNode::publish_move_xyz_feedback() {
     feedback->z_position = status_.z_position;
     feedback->moving = (arduino_status_ == ArduinoStatus::MOVING);
     active_move_goal_->publish_feedback(feedback);
+
+    RCLCPP_INFO(this->get_logger(), "Published move XYZ feedback");
   }
 }
 
@@ -636,7 +618,7 @@ void ArduinoNode::handle_move_xyz_accepted(
 }
 
 void ArduinoNode::handle_feedback_updates() {
-  if (!port_ || device_state_ != DeviceState::OPERATIONAL) {
+  if (!socket_.is_open() || device_state_ != DeviceState::OPERATIONAL) {
     return;
   }
 

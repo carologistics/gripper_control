@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Carologistics
+# Copyright (c) 2024-2025 Carologistics
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ def generate_launch_description():
                 name="arduino_node",
                 parameters=[
                     {
-                        "port": "/dev/arduino",
-                        "baud_rate": 115200,
                         "enable_tf_broadcast": True,
                         "base_frame": "base_link",
                         "waypoint_frame": "waypoint",
@@ -34,6 +32,8 @@ def generate_launch_description():
                         "wp_sensor_analog": True,
                         "wp_sensor_pin": 0,
                         "wp_sensor_analog_threshold": 0.7,
+                        "ip_address": "192.168.1.100",
+                        "port": 12345,
                     }
                 ],
                 output="screen",

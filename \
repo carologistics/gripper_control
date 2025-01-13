@@ -1,0 +1,19 @@
+arduino: add sketch, refactor to cmd
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch thagdorn/arduino
+# Your branch is up to date with 'origin/thagdorn/arduino'.
+#
+# Changes to be committed:
+#	new file:   arduino/ArduinoSketch/ArduinoSketch.ino
+#	new file:   arduino/ArduinoSketch/commands.h
+#	new file:   arduino/ArduinoSketch/pinout.h
+#	modified:   arduino/include/arduino/arduino_node.hpp
+#	modified:   arduino/src/arduino_node.cpp
+#
+# Untracked files:
+#	.vscode/
+#	arduino/ArduinoSketch/.gitignore
+#	arduino/ArduinoSketch/Makefile
+#

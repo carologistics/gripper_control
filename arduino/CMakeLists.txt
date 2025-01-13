@@ -21,6 +21,7 @@ find_package(diagnostic_updater REQUIRED)
 include_directories(
   include
   ${UDEV_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}/ArduinoSketch
 )
 
 # Generate interfaces
@@ -41,7 +42,6 @@ rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_t
 # Arduino node
 add_executable(arduino_node
   src/arduino_node.cpp
-  src/serial_port.cpp
 )
 
 # Ensure the node can find its own messages
