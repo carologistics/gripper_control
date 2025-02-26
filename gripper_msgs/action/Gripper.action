@@ -2,20 +2,10 @@
 float32 x_target
 float32 y_target
 float32 z_target
-#float32 x_rotation
-#float32 y_rotation
-#float32 z_rotation
-#float32 w_rotation
 string frame
 ---
 # Result
 bool success
 ---
 # Feedback
-float32 position_x
-float32 position_y
-float32 position_z
-#float32 x_current_rotation
-#float32 y_current_rotation
-#float32 z_current_rotation
-#float32 w_current_rotation
+

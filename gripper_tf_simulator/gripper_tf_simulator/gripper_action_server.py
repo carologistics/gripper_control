@@ -37,7 +37,7 @@ class GripperActionServer(Node):
         self._current_goal = None
 
         self.publisher_ = self.create_publisher(TransformStamped, '/tf', 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel_gripper', 10)
         self.feedback_timer = None  # Timer for feedback updates
     def destroy(self):
         self._action_server.destroy()
@@ -54,7 +54,6 @@ class GripperActionServer(Node):
     def execute_callback(self, goal_handle):
         self.get_logger().info(f"Executing goal to move to target position: {goal_handle.request}")
 
-        feedback_msg = Gripper.Feedback()
         result = Gripper.Result()
         target_reached = False
 
@@ -83,34 +82,33 @@ class GripperActionServer(Node):
                     f"End-effector orientation: x={orientation.x}, y={orientation.y}, z={orientation.z}, w={orientation.w}"
                 )
 
-                feedback_msg.position_x = goal_handle.request.x_target - current_position.x
-                feedback_msg.position_y = goal_handle.request.y_target - current_position.y
-                feedback_msg.position_z = goal_handle.request.z_target - current_position.z
+                delta_position_x = goal_handle.request.x_target - current_position.x
+                delta_position_y = goal_handle.request.y_target - current_position.y
+                delta_position_z = goal_handle.request.z_target - current_position.z
+                delta_yaw_center = 0.05/current_position.x 
                 current_yaw = math.atan2(
                 2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
                 1.0 - 2.0 * (orientation.y ** 2 + orientation.z ** 2)
                 )
                 target_yaw = math.atan2(goal_handle.request.y_target, goal_handle.request.x_target)
-                z_angle = target_yaw - current_yaw
-                goal_handle.publish_feedback(feedback_msg)
+                yaw_angle = target_yaw - (current_yaw-math.asin2(delta_yaw_center))
 
-                self.get_logger().info(f"z_angle in degrees: {z_angle}")
+                self.get_logger().info(f"yaw_angle in degrees: {yaw_angle}")
                 # Compute velocity
                 cmd_vel = Twist()
-                if goal_handle.request.x_target <0 :
-                    cmd_vel.linear.x = -1 * feedback_msg.position_x
+                if goal_handle.request.x_target <0  :
+                    cmd_vel.linear.x = -1 * delta_position_x
                 else:
-                    cmd_vel.linear.x = 1 * feedback_msg.position_x    
-                cmd_vel.linear.z = 1 * feedback_msg.position_z
-                cmd_vel.angular.z = 4.0 * z_angle
+                    cmd_vel.linear.x = 1 * delta_position_x    
+                cmd_vel.linear.z = 1 * delta_position_z
 
-
+                cmd_vel.angular.z = 4.0 * yaw_angle
                 # Check if the target position is reached (within a small tolerance)
-                tolerance = 0.1  # Define your tolerance
-                if (abs(feedback_msg.position_x) <= tolerance and
-                    abs(feedback_msg.position_y) <= tolerance and
-                    abs(z_angle) <= tolerance and
-                    abs(feedback_msg.position_z) <= tolerance ):
+                tolerance = 0.005# Define your tolerance
+                if (abs(delta_position_x) <= tolerance and
+                    abs(delta_position_y) <= tolerance and
+                    abs(yaw_angle) <= tolerance and
+                    abs(delta_position_z) <= tolerance ):
                     target_reached = True
                     self.feedback_timer.cancel()
 
@@ -126,7 +124,6 @@ class GripperActionServer(Node):
                     return result
                 self.get_logger().info(
                     f"Publishing velocities: x={cmd_vel.linear.x}, y={cmd_vel.linear.y}, z={cmd_vel.linear.z}"
-                    f"Publishing pos: x={feedback_msg.position_x}, y={feedback_msg.position_x}, z={feedback_msg.position_x}"
                 )
 
                 # Publish the command velocity

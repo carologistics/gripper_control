@@ -30,7 +30,7 @@ class GripperActionClient(Node):
 
         # Send the goal asynchronously
         self._send_goal_future = self._action_client.send_goal_async(
-            goal_msg, feedback_callback=self.feedback_callback
+            goal_msg
         )
         self._send_goal_future.add_done_callback(self.goal_response_callback)
 
@@ -44,11 +44,6 @@ class GripperActionClient(Node):
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
-    def feedback_callback(self, feedback_msg):
-        self.get_logger().info(f'Received feedback: Δx={feedback_msg.feedback.position_x}, '
-                               f'Δy={feedback_msg.feedback.position_y}, '
-                               f'Δz={feedback_msg.feedback.position_z}')
-        self.feedback = feedback_msg.feedback
 
     def get_result_callback(self, future):
         result = future.result().result

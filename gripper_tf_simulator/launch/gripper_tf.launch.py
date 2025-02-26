@@ -14,19 +14,10 @@ def generate_launch_description():
              executable='static_tf_gripper_origin',
              name='static_tf_gripper_origin',
          ),
+
          Node(
              package='gripper_tf_simulator',
-             executable='dyn_tf_gripper_x_ori',
-             name='dyn_tf_gripper_x_ori',
-         ),
-         Node(
-             package='gripper_tf_simulator',
-             executable='dyn_tf_gripper_z_ori',
-             name='dyn_tf_gripper_z_ori',
-         ),         
-         Node(
-             package='gripper_tf_simulator',
-             executable='dyn_tf_gripper_yaw',
-             name='dyn_tf_gripper_yaw',
+             executable='dyn_tf_gripper',
+             name='dyn_tf_gripper',
          ),
     ])

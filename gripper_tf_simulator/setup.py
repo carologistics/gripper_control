@@ -23,9 +23,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'dyn_tf_gripper_x_ori = gripper_tf_simulator.dyn_tf_gripper_x_ori:main',
-            'dyn_tf_gripper_z_ori = gripper_tf_simulator.dyn_tf_gripper_z_ori:main',
-            'dyn_tf_gripper_yaw = gripper_tf_simulator.dyn_tf_gripper_yaw:main',
+            'dyn_tf_gripper = gripper_tf_simulator.dyn_tf_gripper:main',
             'gripper_action_server=gripper_tf_simulator.gripper_action_server:main',
             'gripper_action_client=gripper_tf_simulator.gripper_action_client:main',
             'static_tf_gripper_origin=gripper_tf_simulator.static_tf_gripper_origin:main',
