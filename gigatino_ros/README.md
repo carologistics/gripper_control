@@ -1,6 +1,13 @@
 # gigatino_ros
 
-## usage
+## Usage (launch file)
+
+Launch it via:
+```bash
+ros2 launch gigatino_ros launch.py
+```
+
+## Usage (manual bringup)
 To run as multithreaded component:
 ```bash
 ros2 run rclcpp_components component_container_mt

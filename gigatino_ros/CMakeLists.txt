@@ -13,6 +13,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
+find_package(nav2_util REQUIRED)
 find_package(msgpack REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
@@ -31,7 +32,13 @@ ament_target_dependencies(${PROJECT_NAME}
   "rclcpp_components"
   "rclcpp_lifecycle"
   "lifecycle_msgs"
+  "nav2_util"
   "msgpack")
+
+install(DIRECTORY
+  launch
+  DESTINATION
+  share/${PROJECT_NAME})
 
 rclcpp_components_register_node(${PROJECT_NAME} PLUGIN "gigatino_ros::GigatinoROS" EXECUTABLE gigatino_node)
 install(TARGETS

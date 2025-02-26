@@ -14,6 +14,7 @@
 
 #include "lifecycle_msgs/msg/transition.hpp"
 
+#include "nav2_util/lifecycle_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -30,7 +31,7 @@
 
 namespace gigatino_ros {
 constexpr size_t BUFFER_SIZE = 1024;
-class GigatinoROS : public rclcpp_lifecycle::LifecycleNode {
+class GigatinoROS : public nav2_util::LifecycleNode {
   using CallbackReturn =
       rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
   using Home = gigatino_msgs::action::Home;

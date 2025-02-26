@@ -26,7 +26,7 @@ using namespace gigatino_ros;
 
 // **New constructor required for component registration**
 GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
-    : rclcpp_lifecycle::LifecycleNode("gigatino_ros", options),
+    : nav2_util::LifecycleNode("gigatino_ros", "", options),
       socket_(io_service_) { // Change "gigatino_ros" to your actual node name
                              // Initialization code
   // declare_parameter("remote_ip_address", "192.168.1.100");
@@ -45,7 +45,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   // This callback is supposed to be used for initialization and
   // configuring purposes.
   RCLCPP_INFO(get_logger(), "on_configure() is called.");
-
+  createBond();
   command_timeout_ =
       std::chrono::milliseconds(get_parameter("command_timeout_ms").as_int());
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
@@ -146,8 +146,15 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       [this](
           std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
         msgpack::zone zone;
+        // TODO: compute right abolute positions for axis
         std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("MOVE", zone)},
+            {"target_mot_x",
+             msgpack::object(1.5, zone)}, // absolute position of axis
+            {"target_mot_yaw",
+             msgpack::object(1.5, zone)}, // absolute position of axis
+            {"target_mot_z",
+             msgpack::object(1.5, zone)}, // absolute position of axis
         };
         handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
             goal_handle, send_udp_message(data));
@@ -172,12 +179,9 @@ void GigatinoROS::start_io_service() {
     io_running_ = true;
     io_thread_ = std::thread([this]() {
       while (io_running_) {
-        if (io_service_.stopped()) {
-          io_service_.restart();
-        }
         io_service_.run();
+        io_service_.reset();
       }
-      io_service_.reset();
     });
   }
 }
@@ -190,8 +194,8 @@ CallbackReturn GigatinoROS::on_activate(const rclcpp_lifecycle::State &state) {
   RCLCPP_INFO(get_logger(), "Socket bound to interface: %s, port: %d",
               recv_endpoint_.address().to_string().c_str(),
               recv_endpoint_.port());
-  start_receive();
   start_io_service();
+  start_receive();
   RCLCPP_INFO(get_logger(), "on_activate() is called.");
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
@@ -214,9 +218,11 @@ void GigatinoROS::close_socket() {
 CallbackReturn
 GigatinoROS::on_deactivate(const rclcpp_lifecycle::State &state) {
   LifecycleNode::on_deactivate(state);
-  RCLCPP_INFO(get_logger(), "on_deactivate() is called.");
   close_socket();
   stop_io_service();
+  destroyBond();
+  RCLCPP_INFO(get_logger(), "on_deactivate() is called.");
+
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
 }
@@ -244,11 +250,14 @@ void GigatinoROS::start_receive() {
             std::scoped_lock lock(feedback_mtx_);
             unpack_msgpack_data(bytes_received);
             feedback_pub_->publish(current_feedback_);
+            // TODO: compute transform from abs positions
           }
           action_cv_.notify_all();
         }
         // After receiving, continue to listen for more data
-        start_receive();
+        if (io_running_) {
+          start_receive();
+        }
       });
 }
 
@@ -315,16 +324,11 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
 }
 
 CallbackReturn GigatinoROS::on_shutdown(const rclcpp_lifecycle::State &state) {
-  // In our shutdown phase, we release the shared pointers to the
-  // timer and publisher. These entities are no longer available
-  // and our node is "clean".
-  // timer_.reset();
-  // pub_.reset();
-
-  RCLCPP_INFO(get_logger(), "on shutdown is called from state %s.",
-              state.label().c_str());
   close_socket();
   stop_io_service();
+  destroyBond();
+  RCLCPP_INFO(get_logger(), "on shutdown is called from state %s.",
+              state.label().c_str());
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
