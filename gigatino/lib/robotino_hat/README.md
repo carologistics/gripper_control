@@ -85,9 +85,9 @@ Robotino HAT socket wiring:
 Robotino HAT socket wiring:
 - pin 1: unused (is connected to 5v)
 - pin 2: step+ (white)
-- pin 3: dir+ (grey)
-- pin 4: en+ (yellow)
-- pin 5: en-, dir- and step- (green, brown and blue)A
+- pin 3: dir+ (old grey -> new brown)
+- pin 4: en+ (old yellow -> new blue)
+- pin 5: en-, dir- and step- (green, brown and blue -> black)
 
 The D8 has additional out- and out+ connectors that we do not use.
 
