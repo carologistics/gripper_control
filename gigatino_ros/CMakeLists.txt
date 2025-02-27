@@ -36,7 +36,7 @@ ament_target_dependencies(${PROJECT_NAME}
   "msgpack")
 
 install(DIRECTORY
-  launch
+  launch params
   DESTINATION
   share/${PROJECT_NAME})
 
@@ -46,6 +46,11 @@ install(TARGETS
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
+
+install(PROGRAMS
+  scripts/gigatino_mockup.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

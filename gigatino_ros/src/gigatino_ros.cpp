@@ -30,6 +30,7 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
       socket_(io_service_) { // Change "gigatino_ros" to your actual node name
                              // Initialization code
   // declare_parameter("remote_ip_address", "192.168.1.100");
+  declare_parameter("local_ip_address", "127.0.0.1");
   declare_parameter("remote_ip_address", "127.0.0.1");
   declare_parameter("send_port", 8888);
   declare_parameter("recv_port", 8889);
@@ -38,30 +39,22 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
-void GigatinoROS::publish() {
-  // pub_->publish(std::move(msg));
-}
 CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
-  // This callback is supposed to be used for initialization and
-  // configuring purposes.
-  RCLCPP_INFO(get_logger(), "on_configure() is called.");
+  RCLCPP_DEBUG(get_logger(), "on_configure() is called.");
   createBond();
   command_timeout_ =
       std::chrono::milliseconds(get_parameter("command_timeout_ms").as_int());
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
 
-  remote_ip_addr_ = get_parameter("remote_ip_address").as_string();
-  // recv_endpoint_ =
-  // udp::endpoint(boost::asio::ip::address::from_string("192.168.1.2"),
-  // get_parameter("recv_port").as_int());
-  recv_endpoint_ = udp::endpoint(boost::asio::ip::address_v4::loopback(),
-                                 get_parameter("recv_port").as_int());
+  std::string local_ip_addr = get_parameter("remote_ip_address").as_string();
+  std::string remote_ip_addr = get_parameter("remote_ip_address").as_string();
+  recv_endpoint_ =
+      udp::endpoint(boost::asio::ip::address::from_string(local_ip_addr),
+                    get_parameter("recv_port").as_int());
 
-  // send_endpoint_ =
-  // udp::endpoint(boost::asio::ip::address::from_string("192.168.1.100"),
-  // get_parameter("send_port").as_int());
-  send_endpoint_ = udp::endpoint(boost::asio::ip::address_v4::loopback(),
-                                 get_parameter("send_port").as_int());
+  send_endpoint_ =
+      udp::endpoint(boost::asio::ip::address::from_string(remote_ip_addr),
+                    get_parameter("send_port").as_int());
 
   rcl_action_server_options_t server_options =
       rcl_action_server_get_default_options();
@@ -78,14 +71,12 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   home_action_server_ = rclcpp_action::create_server<Home>(
       this, "gigatino/home",
       // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &uuid,
-             std::shared_ptr<const Home::Goal> goal)
-          -> rclcpp_action::GoalResponse {
-        RCLCPP_INFO(get_logger(), "I ACCEPT AND EXECUTE");
+      [this](const rclcpp_action::GoalUUID &,
+             std::shared_ptr<const Home::Goal>) -> rclcpp_action::GoalResponse {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
       // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> goal_handle)
+      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>>)
           -> rclcpp_action::CancelResponse {
         cancel_action(true);
         return rclcpp_action::CancelResponse::ACCEPT;
@@ -97,6 +88,9 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("HOME", zone)},
         };
+        RCLCPP_INFO(
+            get_logger(), "[uuid %s] Starting action HOME",
+            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
         handle_result<rclcpp_action::ServerGoalHandle<Home>, Home::Result>(
             goal_handle, send_udp_message(data));
       },
@@ -105,14 +99,14 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   calibrate_action_server_ = rclcpp_action::create_server<Calibrate>(
       this, "gigatino/calibrate",
       // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &uuid,
-             std::shared_ptr<const Calibrate::Goal> goal)
+      [this](const rclcpp_action::GoalUUID &,
+             std::shared_ptr<const Calibrate::Goal>)
           -> rclcpp_action::GoalResponse {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
       // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>>
-                 goal_handle) -> rclcpp_action::CancelResponse {
+      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>>)
+          -> rclcpp_action::CancelResponse {
         cancel_action(true);
         return rclcpp_action::CancelResponse::ACCEPT;
       },
@@ -123,6 +117,9 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("CALIBRATE", zone)},
         };
+        RCLCPP_INFO(
+            get_logger(), "[uuid %s] Starting action CALIBRATE",
+            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
         handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
                       Calibrate::Result>(goal_handle, send_udp_message(data));
       },
@@ -131,13 +128,12 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   move_action_server_ = rclcpp_action::create_server<Move>(
       this, "gigatino/move",
       // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &uuid,
-             std::shared_ptr<const Move::Goal> goal)
-          -> rclcpp_action::GoalResponse {
+      [this](const rclcpp_action::GoalUUID &,
+             std::shared_ptr<const Move::Goal>) -> rclcpp_action::GoalResponse {
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
       // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle)
+      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>>)
           -> rclcpp_action::CancelResponse {
         cancel_action(true);
         return rclcpp_action::CancelResponse::ACCEPT;
@@ -147,15 +143,20 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
         msgpack::zone zone;
         // TODO: compute right abolute positions for axis
+        float target_mot_x = 250.0f; // mm (between 0 and 250mm)
+        float target_mot_y = 180.0f; // deg (between 0 and 180mm for now)
+        float target_mot_z = 150.0f; // mm (between 0 and 150mm)
         std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("MOVE", zone)},
-            {"target_mot_x",
-             msgpack::object(1.5, zone)}, // absolute position of axis
-            {"target_mot_yaw",
-             msgpack::object(1.5, zone)}, // absolute position of axis
-            {"target_mot_z",
-             msgpack::object(1.5, zone)}, // absolute position of axis
+            {"target_mot_x", msgpack::object(target_mot_x, zone)},
+            {"target_mot_yaw", msgpack::object(target_mot_y, zone)},
+            {"target_mot_z", msgpack::object(target_mot_z, zone)},
         };
+        RCLCPP_INFO(
+            get_logger(),
+            "[uuid %s] Starting action MOVE (to x=%.2fmm, yaw=%.2f°, z=%.2fmm)",
+            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+            target_mot_x, target_mot_y, target_mot_z);
         handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
             goal_handle, send_udp_message(data));
       },
@@ -167,10 +168,10 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 void GigatinoROS::stop_io_service() {
   if (io_running_) {
     io_running_ = false;
-    io_service_.stop(); // Stop async operations
+    io_service_.stop();
     io_service_.reset();
     if (io_thread_.joinable()) {
-      io_thread_.join(); // Wait for thread to finish
+      io_thread_.join();
     }
   }
 }
@@ -196,7 +197,7 @@ CallbackReturn GigatinoROS::on_activate(const rclcpp_lifecycle::State &state) {
               recv_endpoint_.port());
   start_io_service();
   start_receive();
-  RCLCPP_INFO(get_logger(), "on_activate() is called.");
+  RCLCPP_DEBUG(get_logger(), "on_activate() is called.");
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -220,21 +221,21 @@ GigatinoROS::on_deactivate(const rclcpp_lifecycle::State &state) {
   LifecycleNode::on_deactivate(state);
   close_socket();
   stop_io_service();
+  RCLCPP_INFO(get_logger(), "destroy on deactivate");
   destroyBond();
-  RCLCPP_INFO(get_logger(), "on_deactivate() is called.");
+  RCLCPP_DEBUG(get_logger(), "on_deactivate() is called.");
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
 }
 
 CallbackReturn GigatinoROS::on_cleanup(const rclcpp_lifecycle::State &) {
-  // In our cleanup phase, we release the shared pointers to the
-  // timer and publisher. These entities are no longer available
-  // and our node is "clean".
-  // timer_.reset();
-  // pub_.reset();
-
-  RCLCPP_INFO(get_logger(), "on cleanup is called.");
+  home_action_server_.reset();
+  calibrate_action_server_.reset();
+  move_action_server_.reset();
+  feedback_pub_.reset();
+  cb_group_.reset();
+  RCLCPP_DEBUG(get_logger(), "on cleanup is called.");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
 }
@@ -268,37 +269,36 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
     msgpack::unpack(msg, recv_buffer_.data(), size);
 
     msgpack::object obj = msg.get();
+    current_feedback_ = Feedback();
 
     // Check if the object is a map using the new API (v2)
     if (obj.type == msgpack::type::MAP) {
-      // Iterate through the map (obj.via.map) using the correct API
       for (msgpack::object_kv &kv : obj.via.map) {
         const std::string &key = kv.key.as<std::string>();
         msgpack::object &value = kv.val;
 
-        // Check and process each key-value pair
         if (key == "stepper_positions" && value.type == msgpack::type::ARRAY) {
           for (size_t i = 0; i < value.via.array.size && i < 4; ++i) {
             current_feedback_.stepper_positions[i] =
-                value.via.array.ptr[i].as<float>(); // Corrected access pattern
+                value.via.array.ptr[i].as<float>();
           }
         } else if (key == "servo_positions" &&
                    value.type == msgpack::type::ARRAY) {
           for (size_t i = 0; i < value.via.array.size && i < 2; ++i) {
             current_feedback_.servo_positions[i] =
-                value.via.array.ptr[i].as<float>(); // Corrected access pattern
+                value.via.array.ptr[i].as<float>();
           }
         } else if (key == "stepper_directions" &&
                    value.type == msgpack::type::ARRAY) {
           for (size_t i = 0; i < value.via.array.size && i < 4; ++i) {
             current_feedback_.stepper_directions[i] =
-                value.via.array.ptr[i].as<bool>(); // Corrected access pattern
+                value.via.array.ptr[i].as<bool>();
           }
         } else if (key == "stepper_endstops" &&
                    value.type == msgpack::type::ARRAY) {
           for (size_t i = 0; i < value.via.array.size && i < 4; ++i) {
             current_feedback_.stepper_endstops[i] =
-                value.via.array.ptr[i].as<bool>(); // Corrected access pattern
+                value.via.array.ptr[i].as<bool>();
           }
         } else if (key == "wp_sensor" && value.type == msgpack::type::BOOLEAN) {
           current_feedback_.wp_sensor = value.as<bool>();
@@ -324,11 +324,11 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
 }
 
 CallbackReturn GigatinoROS::on_shutdown(const rclcpp_lifecycle::State &state) {
-  close_socket();
-  stop_io_service();
-  destroyBond();
-  RCLCPP_INFO(get_logger(), "on shutdown is called from state %s.",
-              state.label().c_str());
+  // close_socket();
+  // stop_io_service();
+  RCLCPP_INFO(get_logger(), "destroy on shutdown");
+  RCLCPP_DEBUG(get_logger(), "on shutdown is called from state %s.",
+               state.label().c_str());
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -338,7 +338,7 @@ void GigatinoROS::cancel_action(bool stop) {
   {
     std::lock_guard<std::mutex> lk(feedback_mtx_);
     if (action_running_) {
-      RCLCPP_WARN(get_logger(), "Cancelling action");
+      RCLCPP_WARN(get_logger(), "Cancelling previous action for new one");
     }
     cancel_action_ = true;
   }
@@ -378,13 +378,10 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   cancel_action();
   {
     std::unique_lock<std::mutex> lock(feedback_mtx_);
-    // otherwise, wait for it to finish
-    RCLCPP_INFO(get_logger(), "Waiting for action to finish");
-    action_cv_.wait(lock, [&]() {
-      // Check if the command index has increased and the feedback is not busy
-      return !action_running_;
-    });
-    RCLCPP_INFO(get_logger(), "Done, start my action");
+    action_cv_.wait_for(lock, 1s, [this]() { return !action_running_; });
+    if (action_running_) {
+      RCLCPP_WARN(get_logger(), "Other action still busy, overriding it");
+    }
     action_running_ = true;
     curr_command_index_ = current_feedback_.command_index + 1;
     msgpack::zone zone;
@@ -407,8 +404,8 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
       socket_.send_to(boost::asio::buffer(sbuf.data(), sbuf.size()),
                       send_endpoint_);
 
-      print_buffer(sbuf);
-      RCLCPP_INFO(get_logger(), "Message sent");
+      // print_buffer(sbuf);
+      RCLCPP_DEBUG(get_logger(), "Message sent");
       std::unique_lock<std::mutex> lock(feedback_mtx_);
       action_cv_.wait_for(lock, 1s, [&]() {
         return cancel_action_ ||
@@ -424,7 +421,6 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
     }
   }
   std::unique_lock<std::mutex> lock(feedback_mtx_);
-  RCLCPP_INFO(get_logger(), "Action sent, wait for it to finish");
   // action already done
   if (!current_feedback_.busy) {
     action_running_ = false;
@@ -435,7 +431,6 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
     // Check if the command index has increased and the feedback is not busy
     return cancel_action_ || !current_feedback_.busy;
   });
-  RCLCPP_INFO(get_logger(), "took some time, now it is done");
   action_running_ = false;
   if (cancel_action_) {
     return GigatinoResult::CANCELLED;

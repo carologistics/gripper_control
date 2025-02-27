@@ -64,8 +64,6 @@ private:
   boost::asio::ip::udp::endpoint recv_endpoint_;
   boost::asio::ip::udp::endpoint send_endpoint_;
 
-  std::string remote_ip_addr_;
-
   std::thread io_thread_;
   bool io_running_;
 
@@ -105,30 +103,47 @@ private:
 
     switch (result_code) {
     case GigatinoResult::SUCCESS:
+      RCLCPP_INFO(get_logger(), "[uuid %s] Action done",
+                  rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
       goal_handle->succeed(result);
       break;
     case GigatinoResult::FAILED: {
       result->message = "Command failed";
+      RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
+                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                   result->message.c_str());
       goal_handle->abort(result);
       break;
     }
     case GigatinoResult::IGNORED: {
       result->message = "Command not acknowledged";
+      RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
+                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                   result->message.c_str());
       goal_handle->abort(result);
       break;
     }
     case GigatinoResult::TIMEOUT: {
       result->message = "Timeout while executing";
+      RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
+                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                   result->message.c_str());
       goal_handle->abort(result);
       break;
     }
     case GigatinoResult::CANCELLED: {
       result->message = "Cancelled by other action";
+      RCLCPP_WARN(get_logger(), "[uuid %s], %s",
+                  rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                  result->message.c_str());
       goal_handle->abort(result);
       break;
     }
     default: {
       result->message = "Unknown result";
+      RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
+                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                   result->message.c_str());
       goal_handle->abort(result);
       break;
     }
