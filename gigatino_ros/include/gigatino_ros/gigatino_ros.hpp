@@ -25,8 +25,10 @@
 #include <msgpack.hpp>
 
 #include "gigatino_msgs/action/calibrate.hpp"
+#include "gigatino_msgs/action/gripper.hpp"
 #include "gigatino_msgs/action/home.hpp"
 #include "gigatino_msgs/action/move.hpp"
+#include "gigatino_msgs/action/stop.hpp"
 #include "gigatino_msgs/msg/feedback.hpp"
 
 namespace gigatino_ros {
@@ -37,6 +39,8 @@ class GigatinoROS : public nav2_util::LifecycleNode {
   using Home = gigatino_msgs::action::Home;
   using Calibrate = gigatino_msgs::action::Calibrate;
   using Move = gigatino_msgs::action::Move;
+  using Stop = gigatino_msgs::action::Stop;
+  using Gripper = gigatino_msgs::action::Gripper;
   using Feedback = gigatino_msgs::msg::Feedback;
 
 public:
@@ -52,17 +56,13 @@ private:
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State &);
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State &);
 
-  rclcpp_action::GoalResponse
-  handle_home_goal(const rclcpp_action::GoalUUID &,
-                   std::shared_ptr<const Home::Goal>);
-
-  rclcpp_action::CancelResponse handle_home_cancel(
-      std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>>);
-
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
   boost::asio::ip::udp::endpoint recv_endpoint_;
   boost::asio::ip::udp::endpoint send_endpoint_;
+
+  float gripper_open_pos_;
+  float gripper_close_pos_;
 
   std::thread io_thread_;
   bool io_running_;
@@ -150,14 +150,53 @@ private:
     }
   }
 
-  void handle_home_accepted(
-      std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> goal_handle);
+  template <typename ActionT, typename GoalT>
+  std::shared_ptr<rclcpp_action::Server<ActionT>>
+  setup_server(const std::string &action_name,
+               std::function<std::map<std::string, msgpack::object>(
+                   msgpack::zone &, std::shared_ptr<const GoalT>)>
+                   goal_processor,
+               const rcl_action_server_options_t &server_options,
+               rclcpp::CallbackGroup::SharedPtr cb_group) {
+
+    using GoalHandle = rclcpp_action::ServerGoalHandle<ActionT>;
+
+    return rclcpp_action::create_server<ActionT>(
+        this, action_name,
+        // Goal handler
+        [this](const rclcpp_action::GoalUUID &,
+               std::shared_ptr<const GoalT>) -> rclcpp_action::GoalResponse {
+          return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        },
+        // Cancel handler
+        [this](std::shared_ptr<GoalHandle>) -> rclcpp_action::CancelResponse {
+          cancel_action(true);
+          return rclcpp_action::CancelResponse::ACCEPT;
+        },
+        // Accepted handler
+        [this, action_name,
+         goal_processor](std::shared_ptr<GoalHandle> goal_handle) {
+          msgpack::zone zone;
+          auto data = goal_processor(
+              zone, goal_handle->get_goal()); // Call user function
+
+          RCLCPP_INFO(
+              get_logger(), "[uuid %s] Starting action %s",
+              rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+              action_name.c_str());
+
+          handle_result<GoalHandle, typename ActionT::Result>(
+              goal_handle, send_udp_message(data));
+        },
+        server_options, cb_group);
+  }
 
   rclcpp::Publisher<Feedback>::SharedPtr feedback_pub_;
   rclcpp::CallbackGroup::SharedPtr cb_group_;
   rclcpp_action::Server<Home>::SharedPtr home_action_server_;
   rclcpp_action::Server<Calibrate>::SharedPtr calibrate_action_server_;
   rclcpp_action::Server<Move>::SharedPtr move_action_server_;
-  // rclcpp_action::Server<Gripper>::SharedPtr gripper_action_server_;
+  rclcpp_action::Server<Gripper>::SharedPtr gripper_action_server_;
+  rclcpp_action::Server<Stop>::SharedPtr stop_action_server_;
 };
 } // namespace gigatino_ros

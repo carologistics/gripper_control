@@ -36,6 +36,8 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("recv_port", 8889);
   declare_parameter("command_timeout_ms", 15000);
   declare_parameter("max_send_attempts", 3);
+  declare_parameter("gripper_open_pos", 180.0);
+  declare_parameter("gripper_close_pos", 15.0);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
@@ -45,6 +47,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   command_timeout_ =
       std::chrono::milliseconds(get_parameter("command_timeout_ms").as_int());
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
+  gripper_open_pos_ = get_parameter("gripper_open_pos").as_double();
+  gripper_close_pos_ = get_parameter("gripper_close_pos").as_double();
 
   std::string local_ip_addr = get_parameter("remote_ip_address").as_string();
   std::string remote_ip_addr = get_parameter("remote_ip_address").as_string();
@@ -68,97 +72,67 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   feedback_pub_ = rclcpp::create_publisher<Feedback>(
       this, "feedback", rclcpp::QoS(1).best_effort().durability_volatile());
 
-  home_action_server_ = rclcpp_action::create_server<Home>(
-      this, "gigatino/home",
-      // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &,
-             std::shared_ptr<const Home::Goal>) -> rclcpp_action::GoalResponse {
-        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-      },
-      // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>>)
-          -> rclcpp_action::CancelResponse {
-        cancel_action(true);
-        return rclcpp_action::CancelResponse::ACCEPT;
-      },
-      // Lambda for accepted handler
-      [this](
-          std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> goal_handle) {
-        msgpack::zone zone;
-        std::map<std::string, msgpack::object> data = {
+  home_action_server_ = setup_server<Home, Home::Goal>(
+      "gigatino/home",
+      [this](msgpack::zone &zone, std::shared_ptr<const Home::Goal> g)
+          -> std::map<std::string, msgpack::object> {
+        (void)g;
+        return {
             {"command", msgpack::object("HOME", zone)},
         };
-        RCLCPP_INFO(
-            get_logger(), "[uuid %s] Starting action HOME",
-            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
-        handle_result<rclcpp_action::ServerGoalHandle<Home>, Home::Result>(
-            goal_handle, send_udp_message(data));
       },
       server_options, cb_group_);
 
-  calibrate_action_server_ = rclcpp_action::create_server<Calibrate>(
-      this, "gigatino/calibrate",
-      // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &,
-             std::shared_ptr<const Calibrate::Goal>)
-          -> rclcpp_action::GoalResponse {
-        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-      },
-      // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>>)
-          -> rclcpp_action::CancelResponse {
-        cancel_action(true);
-        return rclcpp_action::CancelResponse::ACCEPT;
-      },
-      // Lambda for accepted handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>>
-                 goal_handle) {
-        msgpack::zone zone;
-        std::map<std::string, msgpack::object> data = {
+  calibrate_action_server_ = setup_server<Calibrate, Calibrate::Goal>(
+      "gigatino/calibrate",
+      [this](msgpack::zone &zone, std::shared_ptr<const Calibrate::Goal> g)
+          -> std::map<std::string, msgpack::object> {
+        (void)g;
+        return {
             {"command", msgpack::object("CALIBRATE", zone)},
         };
-        RCLCPP_INFO(
-            get_logger(), "[uuid %s] Starting action CALIBRATE",
-            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
-        handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
-                      Calibrate::Result>(goal_handle, send_udp_message(data));
       },
       server_options, cb_group_);
 
-  move_action_server_ = rclcpp_action::create_server<Move>(
-      this, "gigatino/move",
-      // Lambda for goal handler
-      [this](const rclcpp_action::GoalUUID &,
-             std::shared_ptr<const Move::Goal>) -> rclcpp_action::GoalResponse {
-        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
-      },
-      // Lambda for cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>>)
-          -> rclcpp_action::CancelResponse {
-        cancel_action(true);
-        return rclcpp_action::CancelResponse::ACCEPT;
-      },
-      // Lambda for accepted handler
-      [this](
-          std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
-        msgpack::zone zone;
+  move_action_server_ = setup_server<Move, Move::Goal>(
+      "gigatino/move",
+      [this](msgpack::zone &zone, std::shared_ptr<const Move::Goal> g)
+          -> std::map<std::string, msgpack::object> {
+        (void)g;
         // TODO: compute right abolute positions for axis
         float target_mot_x = 250.0f; // mm (between 0 and 250mm)
         float target_mot_y = 180.0f; // deg (between 0 and 180mm for now)
         float target_mot_z = 150.0f; // mm (between 0 and 150mm)
-        std::map<std::string, msgpack::object> data = {
+        return {
             {"command", msgpack::object("MOVE", zone)},
             {"target_mot_x", msgpack::object(target_mot_x, zone)},
             {"target_mot_yaw", msgpack::object(target_mot_y, zone)},
             {"target_mot_z", msgpack::object(target_mot_z, zone)},
         };
-        RCLCPP_INFO(
-            get_logger(),
-            "[uuid %s] Starting action MOVE (to x=%.2fmm, yaw=%.2f°, z=%.2fmm)",
-            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
-            target_mot_x, target_mot_y, target_mot_z);
-        handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
-            goal_handle, send_udp_message(data));
+      },
+      server_options, cb_group_);
+
+  gripper_action_server_ = setup_server<Gripper, Gripper::Goal>(
+      "gigatino/gripper",
+      [this](msgpack::zone &zone, std::shared_ptr<const Gripper::Goal> g)
+          -> std::map<std::string, msgpack::object> {
+        float target_servo_pos = gripper_close_pos_;
+        if (g->open) {
+          target_servo_pos = gripper_open_pos_;
+        }
+        return {
+            {"command", msgpack::object("MOVE", zone)},
+            {"target_servo_gripper", msgpack::object(target_servo_pos, zone)},
+        };
+      },
+      server_options, cb_group_);
+
+  stop_action_server_ = setup_server<Stop, Stop::Goal>(
+      "gigatino/stop",
+      [this](msgpack::zone &zone, std::shared_ptr<const Stop::Goal> g)
+          -> std::map<std::string, msgpack::object> {
+        (void)g;
+        return {{"command", msgpack::object("STOP", zone)}};
       },
       server_options, cb_group_);
 
@@ -233,6 +207,7 @@ CallbackReturn GigatinoROS::on_cleanup(const rclcpp_lifecycle::State &) {
   home_action_server_.reset();
   calibrate_action_server_.reset();
   move_action_server_.reset();
+  gripper_action_server_.reset();
   feedback_pub_.reset();
   cb_group_.reset();
   RCLCPP_DEBUG(get_logger(), "on cleanup is called.");
