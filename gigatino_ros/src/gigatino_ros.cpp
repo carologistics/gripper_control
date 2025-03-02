@@ -70,7 +70,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   // server_options.result_service_qos = qos_profile;
 
   feedback_pub_ = rclcpp::create_publisher<Feedback>(
-      this, "feedback", rclcpp::QoS(1).best_effort().durability_volatile());
+      this, "gigatino/feedback",
+      rclcpp::QoS(1).best_effort().durability_volatile());
 
   home_action_server_ = setup_server<Home, Home::Goal>(
       "gigatino/home",
