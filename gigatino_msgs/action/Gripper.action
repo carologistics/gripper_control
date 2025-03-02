@@ -1,10 +1,8 @@
+bool OPEN = true
+bool CLOSED = false
 # Goal
-bool close
+bool open
 ---
 # Result
-bool success
 string message
 ---
-# Feedback
-bool gripper_closed
-bool moving
