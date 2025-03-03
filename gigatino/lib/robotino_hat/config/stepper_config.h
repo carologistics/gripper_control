@@ -38,16 +38,17 @@
 /**
  * Microsteps are set via the SW switch on igus D7/D8 controller,
  * the values here need to match the switch config!
+ * (rot_per_step / microsteps ) / gear ratio = precision per pulse (mm or deg)
  */
-#define MOT_X_MICROSTEPS 4
-#define MOT_YAW_MICROSTEPS 8
-#define MOT_Z_MICROSTEPS 16
+#define MOT_X_MICROSTEPS 8   // 0.0275 mm
+#define MOT_YAW_MICROSTEPS 8 // 0.0059 deg
+#define MOT_Z_MICROSTEPS 16  // 0.021875 mm
 #define MOT_U_MICROSTEPS 4
 
 /**
  * Gear ratios come from the axis datasheets
  */
-#define MOT_X_GEAR_RATIO (360 / 70.f) // feed rate (rev/mm)
+#define MOT_X_GEAR_RATIO (360 / 44.f) // feed rate (rev/mm)
 #define MOT_YAW_GEAR_RATIO 38         // 38:1 ratio axis/motor rev
 #define MOT_Z_GEAR_RATIO (360 / 70.f) // feed rate (rev/mm)
 #define MOT_U_GEAR_RATIO (360 / 44.f) // feed rate (rev/mm)

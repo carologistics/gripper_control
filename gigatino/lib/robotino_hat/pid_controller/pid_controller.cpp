@@ -15,6 +15,12 @@
 #include "pid_controller.h"
 #include <Arduino.h>
 
+void PIDController::reset() {
+  integral_ = 0;
+  prev_error_ = 0;
+  prev_speed_ = 0;
+}
+
 float PIDController::compute(float target, float current, float dt) {
   float error = target - current;
   integral_ += error * dt;

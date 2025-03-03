@@ -155,6 +155,34 @@ bool load_command_from_json(JsonDocument &doc) {
       }
       counter++;
     }
+  } else if (doc["command"] == "S_CONTROLLER_UPDATE") {
+    current_command.command_id = CommandID::S_CONTROLLER_UPDATE;
+    if (!doc["motor"].is<const char *>()) {
+      return false;
+    }
+    uint8_t mot_index = 0;
+    const char *motor = doc["motor"];
+    if (strcmp(motor, "mot_x") == 0) {
+      mot_index = 0;
+    } else if (strcmp(motor, "mot_yaw") == 0) {
+      mot_index = 1;
+    } else if (strcmp(motor, "mot_z") == 0) {
+      mot_index = 2;
+    } else if (strcmp(motor, "mot_u") == 0) {
+      mot_index = 3;
+    } else {
+      return false;
+    }
+    current_command.motion_controller_motor_id = mot_index;
+    current_command.motion_controller_param_mask = 0;
+    int counter = 0;
+    for (auto &val : {"max_speed", "max_accel", "max_jerk"}) {
+      if (doc[val].is<float>()) {
+        current_command.motion_controller_param_mask |= 1 << counter;
+        current_command.motion_controller_params[counter] = doc[val];
+      }
+      counter++;
+    }
   } else {
 #ifdef DEBUG_VIA_RPC
     RPC.println("Load json failed, unknown command");

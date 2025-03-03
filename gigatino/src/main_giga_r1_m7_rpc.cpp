@@ -37,8 +37,7 @@ Command current_command;
 bool new_command_received = false;
 
 unsigned long last_loop = 0;
-unsigned long last_pid_update = 0; // track actual time between pid updates
-unsigned long now = 0;
+unsigned long loop_delta = CONTROL_DT;
 
 // this determines the order for the position commands to be interpreted
 // e.g., first motor in this list will be x, second yaw, third z, fourth u
@@ -208,16 +207,18 @@ inline bool stepper_move(float dt) {
         stepper_setup[i]->set_speed(0);
         continue;
       }
-      float speed = stepper_setup[i]->pid_controller.compute(
+      float speed = stepper_setup[i]->motion_controller.compute(
           current_command.stepper_positions[i],
           current_feedback.stepper_positions[i], dt);
-      speed = stepper_setup[i]->unit_to_steps(speed);
       if (speed > 0.f) {
         stepper_setup[i]->set_dir(stepper_setup[i]->positive_dir);
       } else {
         stepper_setup[i]->set_dir(!stepper_setup[i]->positive_dir);
       }
-      stepper_setup[i]->set_speed(abs(speed));
+      speed = abs(speed);
+      speed = stepper_setup[i]->unit_to_steps(speed);
+
+      stepper_setup[i]->set_speed(speed);
     }
   }
   return target_reached;
@@ -257,25 +258,35 @@ void execute_command(void) {
         stepper_positions_reached =
             static_cast<bool>(current_command.stepper_mask);
         servo_positions_reached = static_cast<bool>(current_command.servo_mask);
+
+        for (size_t i = 0; i < stepper_setup.size(); i++) {
+          stepper_setup[i]->motion_controller.set_dist(
+              current_command.stepper_positions[i] -
+              current_feedback.stepper_positions[i]);
+        }
         new_command_received = false;
       }
 
-      now = millis();
-      float dt_sec = (now - last_pid_update) / 1000.0f;
+      float dt_sec = loop_delta / 1000.0f;
       stepper_positions_reached = stepper_move(dt_sec);
       servo_positions_reached = servo_approx_angle(dt_sec);
-      last_pid_update = now;
       if (stepper_positions_reached && servo_positions_reached) {
 #ifdef SERIAL_OUTPUT
         Serial.println("Move done");
 #endif
         current_feedback.busy = false;
+        for (const auto &mot : stepper_setup) {
+          mot->pid_controller.reset();
+
+          mot->motion_controller.reset();
+        }
       }
       break;
     }
     case CommandID::PID_UPDATE:
       new_command_received = false;
       for (size_t i = 0; i < stepper_setup.size(); i++) {
+        stepper_setup[i]->set_speed(0);
         if (current_command.pid_motor_id == i) {
 #ifdef SERIAL_OUTPUT
           Serial.print("PID Update for motor ");
@@ -314,6 +325,51 @@ void execute_command(void) {
       }
 #ifdef SERIAL_OUTPUT
       Serial.println("PID Update");
+#endif
+      new_command_received = false;
+      current_feedback.busy = false;
+      break;
+
+    case CommandID::S_CONTROLLER_UPDATE:
+      new_command_received = false;
+      for (size_t i = 0; i < stepper_setup.size(); i++) {
+        stepper_setup[i]->set_speed(0);
+        if (current_command.motion_controller_motor_id == i) {
+#ifdef SERIAL_OUTPUT
+          Serial.print("S Controller Update for motor ");
+          Serial.print(i);
+#endif
+          if (current_command.pid_param_mask & 1) {
+
+            stepper_setup[i]->motion_controller.max_speed_ =
+                current_command.motion_controller_params[0];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New max speed: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_speed_);
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 1)) {
+            stepper_setup[i]->motion_controller.max_accel_ =
+                current_command.motion_controller_params[1];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New accel: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_accel_);
+
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 2)) {
+
+            stepper_setup[i]->motion_controller.max_jerk_ =
+                current_command.motion_controller_params[2];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New jerk: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_jerk_);
+#endif
+          }
+        }
+      }
+#ifdef SERIAL_OUTPUT
+      Serial.println(" Motion Controller Update");
 #endif
       new_command_received = false;
       current_feedback.busy = false;
@@ -374,7 +430,7 @@ void loop() {
   if (millis() < last_loop + CONTROL_DT) {
     return;
   }
-
+  loop_delta = millis() - last_loop;
   last_loop = millis();
 #ifdef DEBUG_VIA_RPC
   // step 0: write RPC buffer to serial
@@ -398,7 +454,7 @@ void loop() {
 
 #ifdef SERIAL_OUTPUT
   static unsigned long last_called = millis();
-  if (last_called + 1000 < millis()) {
+  if (last_called + 100 < millis()) {
 
     last_called = millis();
     if (new_command_received) {

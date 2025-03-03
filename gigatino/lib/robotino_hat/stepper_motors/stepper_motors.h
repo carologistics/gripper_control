@@ -10,6 +10,7 @@
  * hence we use U for X.
  */
 #include <pid_controller/pid_controller.h>
+#include <s_controller/s_controller.h>
 #include <timer_setup/timer_setup.h>
 
 //
@@ -51,6 +52,7 @@ struct StepperMotorSetup {
   const float precision_threshold;
   // for smooth operation use this PID controller to control the motor
   PIDController pid_controller;
+  SCurveMotionController motion_controller;
 
   // call once to setup everything
   void init(void);

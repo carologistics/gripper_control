@@ -24,7 +24,8 @@ enum CommandID {
   MOVE = 1,
   STOP = 2,
   CALIBRATE = 3,
-  PID_UPDATE = 4
+  PID_UPDATE = 4,
+  S_CONTROLLER_UPDATE = 5
 };
 
 // Ext -Ethernet-> M4 -Shared Mem-> M7
@@ -33,17 +34,19 @@ typedef struct command {
   union {
     float stepper_positions[4];
     float pid_params[4];
+    float motion_controller_params[4];
   };
   union {
     uint8_t stepper_mask;
 
     uint8_t pid_motor_id;
+    uint8_t motion_controller_motor_id;
   };
   float servo_positions[2];
   union {
     uint8_t servo_mask;
-
     uint8_t pid_param_mask;
+    uint8_t motion_controller_param_mask;
   };
   size_t command_index;
 } __attribute__((aligned(8))) Command;

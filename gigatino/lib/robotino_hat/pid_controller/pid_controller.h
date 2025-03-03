@@ -6,6 +6,7 @@ public:
         min_speed_(min_speed), integral_(0), prev_error_(0), prev_speed_(0) {}
 
   float compute(float target, float current, float dt);
+  void reset();
 
   float Kp_, Ki_, Kd_, max_accel_, max_speed_, min_speed_, integral_,
       prev_error_, prev_speed_;
