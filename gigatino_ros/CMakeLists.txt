@@ -49,6 +49,7 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/gigatino_mockup.py
+  scripts/test_ethernet.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
