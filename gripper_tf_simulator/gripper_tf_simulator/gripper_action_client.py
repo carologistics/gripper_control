@@ -43,6 +43,9 @@ class GripperActionClient(Node):
         goal_msg.frame = frame
 
         # Send the goal asynchronously
+        self._send_goal_future = self._action_client.send_goal_async(
+            goal_msg
+        )
         self._send_goal_future = self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
         self._send_goal_future.add_done_callback(self.goal_response_callback)
 
@@ -56,13 +59,6 @@ class GripperActionClient(Node):
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
-    def feedback_callback(self, feedback_msg):
-        self.get_logger().info(
-            f"Received feedback: Δx={feedback_msg.feedback.position_x}, "
-            f"Δy={feedback_msg.feedback.position_y}, "
-            f"Δz={feedback_msg.feedback.position_z}"
-        )
-        self.feedback = feedback_msg.feedback
 
     def get_result_callback(self, future):
         result = future.result().result
@@ -78,10 +74,10 @@ def main(args=None):
     action_client = GripperActionClient()
     try:
         # Set the desired target position and frame
-        x_target = 2.0
-        y_target = 5.0
-        z_target = 3.0
-        frame = "gripper_final"
+        x_target = 0.4
+        y_target = 0.5
+        z_target = 5.0
+        frame = 'base_link'
 
         action_client.send_goal(x_target, y_target, z_target, frame)
         rclpy.spin(action_client)

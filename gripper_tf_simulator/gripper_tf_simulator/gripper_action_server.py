@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
-import threading
+import math
 import time
 
 import rclpy
@@ -23,12 +23,10 @@ from rclpy.action import CancelResponse
 from rclpy.action import GoalResponse
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from tf2_ros import Buffer
-from tf2_ros import TransformBroadcaster
-from tf2_ros import TransformListener
-
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster
+from geometry_msgs.msg import TransformStamped, Twist
 from gripper_msgs.action import Gripper
-
+from transforms3d.euler import euler2quat
 
 class GripperActionServer(Node):
 
@@ -57,7 +55,7 @@ class GripperActionServer(Node):
         self._current_goal = None
 
         self.publisher_ = self.create_publisher(TransformStamped, "/tf", 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, "/cmd_vel_gripper", 10)
         self.feedback_timer = None  # Timer for feedback updates
 
     def destroy(self):
@@ -75,7 +73,6 @@ class GripperActionServer(Node):
     def execute_callback(self, goal_handle):
         self.get_logger().info(f"Executing goal to move to target position: {goal_handle.request}")
 
-        feedback_msg = Gripper.Feedback()
         result = Gripper.Result()
         target_reached = False
 
@@ -83,69 +80,55 @@ class GripperActionServer(Node):
             nonlocal target_reached
 
             try:
-                # Query the transform
-                transform = self.tf_buffer.lookup_transform(
-                    target_frame="base_link",  # Frame to query
-                    source_frame=goal_handle.request.frame,  # Reference frame
-                    time=rclpy.time.Time(),
-                )
 
-                # Calculate feedback
-                current_position = transform.transform.translation
-                self.get_logger().info(
-                    f"Relative position (base_link -> goal_handle.request.frame): "
-                    f"End-effector position: x={current_position.x}, y={current_position.y}, z={current_position.z}"
-                )
+                posestamp = PoseStamped()
+                posestamp.header.frame_id = goal_handle.request.frame
+                posestamp.pose.position.x = goal_handle.request.x_target
+                posestamp.pose.position.y = goal_handle.request.y_target
+                posestamp.pose.position.z = goal_handle.request.z_target
+                target_point = self.tf_buffer.transform(posestamp, "gripper_home_origin")
+                z_abs =  target_point.pose.position.z
+                target_to_yaw = self.tf_buffer.transform(posestamp, "gripper_yaw_origin")
 
-                # Extract rotation (orientation as a quaternion)
-                orientation = transform.transform.rotation
-                self.get_logger().info(
-                    f"Relative orientation (base_link -> goal_handle.request.frame): "
-                    f"End-effector orientation: x={orientation.x},\
-                    y={orientation.y}, z={orientation.z}, w={orientation.w}"
-                )
-                feedback_msg.position_x = goal_handle.request.x_target - current_position.x
-                feedback_msg.position_y = goal_handle.request.y_target - current_position.y
-                feedback_msg.position_z = goal_handle.request.z_target - current_position.z
-                # feedback_msg.x_angle = goal_handle.request.raw_target - orientation.x
-                # feedback_msg.y_angle = goal_handle.request.pitch_target - orientation.y
-                # feedback_msg.z_angle = goal_handle.request.yaw_target - orientation.z
-                # feedback_msg.w_angle = goal_handle.request.qua_target - orientation.w
-                goal_handle.publish_feedback(feedback_msg)
+                offset_end_effector = self.tf_buffer.lookup_transform(target_frame='gripper_x_dyn',source_frame='gripper_end_effector',time=rclpy.time.Time())
+                end_effector_to_yaw = self.tf_buffer.lookup_transform(target_frame='gripper_end_effector',source_frame='gripper_yaw_origin',time=rclpy.time.Time())
+                d = self.tf_buffer.lookup_transform(target_frame='gripper_x_origin',source_frame='gripper_yaw_origin',time=rclpy.time.Time())
+                d_rel = math.sqrt(d.transform.translation.x**2+d.transform.translation.y**2)
+                g = math.sqrt(target_to_yaw.pose.position.x**2 + target_to_yaw.pose.position.y **2)
+                beta = math.acos(abs(end_effector_to_yaw.transform.translation.y)/g) 
+                x_static =  abs(d.transform.translation.x) +  offset_end_effector.transform.translation.x
+                x_delta = g*math.sin(beta)
+                x_abs = x_delta - x_static
+                t_x = target_to_yaw.pose.position.x
+                t_y = target_to_yaw.pose.position.y
+                alpha = math.atan(abs(t_x) / abs(t_y))
+                if posestamp.pose.position.y <= abs(d.transform.translation.y) :
+                    tetha = (90*math.pi/180)- beta + alpha
+                elif posestamp.pose.position.y > abs(d.transform.translation.y) :
+                    tetha = (math.pi) - (math.pi/2 -beta) -  beta - alpha
 
-                # Compute velocity
-                cmd_vel = Twist()
-                cmd_vel.linear.x = 3 * feedback_msg.position_x
-                cmd_vel.linear.y = 3 * feedback_msg.position_y
-                cmd_vel.linear.z = 3 * feedback_msg.position_z
+                # Publish the 
+                transform_msg = TransformStamped()
+                transform_msg.header.stamp = self.get_clock().now().to_msg()
+                transform_msg.header.frame_id = "base_link"
+                transform_msg.child_frame_id = "gripper_end_effector"
 
-                # Check if the target position is reached (within a small tolerance)
-                tolerance = 0.01  # Define your tolerance
-                if (
-                    abs(feedback_msg.position_x) <= tolerance
-                    and abs(feedback_msg.position_y) <= tolerance
-                    and abs(feedback_msg.position_z) <= tolerance
-                ):
-                    target_reached = True
-                    self.feedback_timer.cancel()
+                # Set translation values
+                transform_msg.transform.translation.x = x_abs
+                transform_msg.transform.translation.y = 0
+                transform_msg.transform.translation.z = z_abs
 
-                    # Stop the robot by publishing zero velocities
-                    stop_cmd_vel = Twist()
-                    stop_cmd_vel.linear.x = 0.0
-                    stop_cmd_vel.linear.y = 0.0
-                    stop_cmd_vel.linear.z = 0.0
-                    self.cmd_vel_publisher.publish(stop_cmd_vel)
+                # Set rotation (yaw_after needs to be converted to quaternion)
 
-                    goal_handle.succeed()
+                q = euler2quat(0, 0, tetha)
+                transform_msg.transform.rotation.x = q[0]
+                transform_msg.transform.rotation.y = q[1]
+                transform_msg.transform.rotation.z = q[2]
+                transform_msg.transform.rotation.w = q[3]
 
-                    self.get_logger().info("Target position reached. Robot stopped.")
-                    result = Gripper.Result()
-                    result.success = True
-                    return result
-
-                # Publish the command velocity
-                self.cmd_vel_publisher.publish(cmd_vel)
-
+                # Publish the transform
+                self.publisher_.publish(transform_msg)
+                self.get_logger().info(f"x:{x_abs}, g:{offset_end_effector.transform.translation.x}, z:{z_abs}, current angle{tetha}, beta:{beta},alpha:{alpha}, d:x{d.transform.translation.x},y{d.transform.translation.x},end_efector:{end_effector_to_yaw.transform.translation.y},target_point:{target_point.pose.position.x},{target_point.pose.position.y},{target_point.pose.position.z}")
             except Exception as e:
                 self.get_logger().error(f"Error in feedback/publish loop: {str(e)}")
                 goal_handle.abort()
@@ -176,7 +159,5 @@ def main(args=None):
     finally:
         gripper_action_server.destroy_node()
         rclpy.shutdown()
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
