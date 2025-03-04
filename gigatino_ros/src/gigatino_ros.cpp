@@ -15,7 +15,7 @@
 #include "gigatino_ros/gigatino_ros.hpp"
 
 #include "rclcpp_components/register_node_macro.hpp"
-
+#include <cmath>
 using namespace std::chrono_literals;
 using CallbackReturn =
     rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -101,14 +101,47 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           -> std::map<std::string, msgpack::object> {
         (void)g;
         // TODO: compute right abolute positions for axis
-        float target_mot_x = 250.0f; // mm (between 0 and 250mm)
-        float target_mot_y = 180.0f; // deg (between 0 and 180mm for now)
-        float target_mot_z = 150.0f; // mm (between 0 and 150mm)
+        geometry_msgs::msg::PoseStamped target_point;
+        geometry_msgs::msg::PoseStamped goal_pose = geometry_msgs::msg::PoseStamped();
+        goal_pose.header.frame_id = "base_link";
+        goal_pose.pose.position.x = g->x; //-> for pointer 
+        goal_pose.pose.position.y = g->y;
+        goal_pose.pose.position.z = g->z;
+        goal_pose.header.stamp.sec = 0;
+        goal_pose.header.stamp.nanosec = 0;
+        tf_buffer_->transform(goal_pose, target_point, "gripper_home_origin");
+        float z_abs = target_point.pose.position.z;
+        geometry_msgs::msg::PoseStamped target_to_yaw;
+        tf_buffer_->transform(goal_pose, target_to_yaw, "gripper_yaw_origin");
+        geometry_msgs::msg::TransformStamped offset_end_effector= tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector", tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped end_effector_to_yaw= tf_buffer_->lookupTransform("gripper_yaw", "gripper_end_effector", tf2::TimePointZero);
+        float d = end_effector_to_yaw.transform.translation.y;
+        float T_distance = std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) + std::pow(target_to_yaw.pose.position.y, 2));
+        float beta = acos( abs(d)/abs(T_distance));
+        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn = tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw", tf2::TimePointZero);
+        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) + abs(offset_end_effector.transform.translation.x);
+        float x_delta = T_distance*sin(beta);
+        float x_abs = x_delta - x_static;
+        float t_x = target_to_yaw.pose.position.x;
+        float t_y = target_to_yaw.pose.position.y;
+        float alpha = atan(abs(t_x) / abs(t_y));
+        float tetha;
+        if (t_y >= 0)
+        { tetha = beta - alpha;}
+        else{ tetha = (M_PI - beta-alpha)*-1;}
+        float target_mot_x = x_abs;
+        float target_mot_y = tetha *180/M_PI;
+        float target_mot_z = z_abs;
+        RCLCPP_INFO(get_logger(),"x.abs : %.2f",x_abs);
+        RCLCPP_INFO(get_logger(),"yaw_angle : %.2f",tetha);
+        RCLCPP_INFO(get_logger(),"z_abs : %.2f",z_abs);
+        
         return {
             {"command", msgpack::object("MOVE", zone)},
             {"target_mot_x", msgpack::object(target_mot_x, zone)},
             {"target_mot_yaw", msgpack::object(target_mot_y, zone)},
             {"target_mot_z", msgpack::object(target_mot_z, zone)},
+
         };
       },
       server_options, cb_group_);
@@ -136,6 +169,9 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         return {{"command", msgpack::object("STOP", zone)}};
       },
       server_options, cb_group_);
+  tf_buffer_ =    std::make_unique<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ =  std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -228,6 +264,20 @@ void GigatinoROS::start_receive() {
             unpack_msgpack_data(bytes_received);
             feedback_pub_->publish(current_feedback_);
             // TODO: compute transform from abs positions
+            geometry_msgs::msg::TransformStamped t;
+
+            t.header.stamp = this->get_clock()->now();
+            t.header.frame_id = "turtle1";
+            t.child_frame_id = "carrot1";
+            t.transform.translation.x = 0.0;
+            t.transform.translation.y = 2.0;
+            t.transform.translation.z = 0.0;
+            t.transform.rotation.x = 0.0;
+            t.transform.rotation.y = 0.0;
+            t.transform.rotation.z = 0.0;
+            t.transform.rotation.w = 1.0;
+
+            tf_broadcaster_->sendTransform(t);
           }
           action_cv_.notify_all();
         }
