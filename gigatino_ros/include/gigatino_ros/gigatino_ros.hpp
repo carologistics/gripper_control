@@ -20,6 +20,7 @@
 
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/quaternion.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "nav2_util/lifecycle_node.hpp"

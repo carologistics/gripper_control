@@ -38,6 +38,12 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("max_send_attempts", 3);
   declare_parameter("gripper_open_pos", 180.0);
   declare_parameter("gripper_close_pos", 15.0);
+  declare_parameter("z_min",2);
+  declare_parameter("z_max",2);
+  declare_parameter("x_min",2);
+  declare_parameter("x_max",2);
+  declare_parameter("yaw_min",2);
+  declare_parameter("yaw_max",2);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
@@ -124,23 +130,22 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         float x_abs = x_delta - x_static;
         float t_x = target_to_yaw.pose.position.x;
         float t_y = target_to_yaw.pose.position.y;
-        float alpha = atan(abs(t_x) / abs(t_y));
-        float tetha;
-        if (t_y >= 0)
-        { tetha = beta - alpha;}
+        float tetha;float alpha= atan(abs(t_x) / abs(t_y));
+        if (t_y = 0)
+        {tetha = 0;}
+        else if (t_y >= 0)
+        {tetha = beta - alpha;}
         else{ tetha = (M_PI - beta-alpha)*-1;}
-        float target_mot_x = x_abs;
         float target_mot_y = tetha *180/M_PI;
-        float target_mot_z = z_abs;
         RCLCPP_INFO(get_logger(),"x.abs : %.2f",x_abs);
         RCLCPP_INFO(get_logger(),"yaw_angle : %.2f",tetha);
         RCLCPP_INFO(get_logger(),"z_abs : %.2f",z_abs);
         
         return {
             {"command", msgpack::object("MOVE", zone)},
-            {"target_mot_x", msgpack::object(target_mot_x, zone)},
+            {"target_mot_x", msgpack::object(x_abs, zone)},
             {"target_mot_yaw", msgpack::object(target_mot_y, zone)},
-            {"target_mot_z", msgpack::object(target_mot_z, zone)},
+            {"target_mot_z", msgpack::object(z_abs, zone)},
 
         };
       },
@@ -264,20 +269,31 @@ void GigatinoROS::start_receive() {
             unpack_msgpack_data(bytes_received);
             feedback_pub_->publish(current_feedback_);
             // TODO: compute transform from abs positions
-            geometry_msgs::msg::TransformStamped t;
-
-            t.header.stamp = this->get_clock()->now();
-            t.header.frame_id = "turtle1";
-            t.child_frame_id = "carrot1";
-            t.transform.translation.x = 0.0;
-            t.transform.translation.y = 2.0;
-            t.transform.translation.z = 0.0;
-            t.transform.rotation.x = 0.0;
-            t.transform.rotation.y = 0.0;
-            t.transform.rotation.z = 0.0;
-            t.transform.rotation.w = 1.0;
-
-            tf_broadcaster_->sendTransform(t);
+            geometry_msgs::msg::TransformStamped transf_yaw;
+            transf_yaw.header.stamp = this->get_clock()->now();
+            transf_yaw.header.frame_id = "gripper_yaw_origin";
+            transf_yaw.child_frame_id = "gripper_yaw";
+            geometry_msgs::msg::TransformStamped transf_x;
+            transf_x.header.stamp = this->get_clock()->now();
+            transf_x.header.frame_id = "gripper_x_origin";
+            transf_x.child_frame_id = "gripper_x_dyn";
+            geometry_msgs::msg::TransformStamped transf_z;
+            transf_z.header.stamp = this->get_clock()->now();
+            transf_z.header.frame_id = "gripper_x_origin";
+            transf_z.child_frame_id = "gripper_x_dyn";
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_feedback_.stepper_positions[1]);//0=x,1=yaw,2=z
+            transf_yaw.transform.rotation.x = q.x();
+            transf_yaw.transform.rotation.y = q.y();
+            transf_yaw.transform.rotation.z = q.z();
+            transf_yaw.transform.rotation.w = q.w();
+            transf_x.transform.translation.x = current_feedback_.stepper_positions[0];
+            transf_z.transform.translation.z = current_feedback_.stepper_positions[2];
+            std::vector< geometry_msgs::msg::TransformStamped > transforms;//function to pack more transforms into 1 array
+            transforms.push_back(transf_x);
+            transforms.push_back(transf_yaw);
+            transforms.push_back(transf_z);
+            tf_broadcaster_->sendTransform(transforms);    
           }
           action_cv_.notify_all();
         }
