@@ -15,12 +15,12 @@
 #include "lifecycle_msgs/msg/transition.hpp"
 
 #include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/transform_listener.h"
 
-#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "nav2_util/lifecycle_node.hpp"
@@ -69,9 +69,9 @@ private:
   boost::asio::ip::udp::socket socket_;
   boost::asio::ip::udp::endpoint recv_endpoint_;
   boost::asio::ip::udp::endpoint send_endpoint_;
-  
+
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
-  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_; 
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
   float gripper_open_pos_;
@@ -82,6 +82,8 @@ private:
   float min_z_;
   float min_x_;
   float min_yaw_;
+
+  float target_mot_x_, target_mot_yaw_, target_mot_z_;
 
   std::thread io_thread_;
   bool io_running_;

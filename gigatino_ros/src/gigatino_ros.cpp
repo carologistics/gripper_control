@@ -38,12 +38,12 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("max_send_attempts", 3);
   declare_parameter("gripper_open_pos", 180.0);
   declare_parameter("gripper_close_pos", 15.0);
-  declare_parameter("z_min",2);
-  declare_parameter("z_max",2);
-  declare_parameter("x_min",2);
-  declare_parameter("x_max",2);
-  declare_parameter("yaw_min",2);
-  declare_parameter("yaw_max",2);
+  declare_parameter("z_min", 2);
+  declare_parameter("z_max", 2);
+  declare_parameter("x_min", 2);
+  declare_parameter("x_max", 2);
+  declare_parameter("yaw_min", 2);
+  declare_parameter("yaw_max", 2);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
@@ -106,16 +106,17 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       },
       server_options, cb_group_);
 
-  move_action_server_ = setup_server<Move, Move::Goal>(
-      "gigatino/move",
-      [this](msgpack::zone &zone, std::shared_ptr<const Move::Goal> g)
-          -> std::map<std::string, msgpack::object> {
-        (void)g;
-        // TODO: compute right abolute positions for axis
+  move_action_server_ = rclcpp_action::create_server<Move>(
+      this, "gigatino/move",
+      // Goal handler
+      [this](
+          const rclcpp_action::GoalUUID &,
+          std::shared_ptr<const Move::Goal> g) -> rclcpp_action::GoalResponse {
         geometry_msgs::msg::PoseStamped target_point;
-        geometry_msgs::msg::PoseStamped goal_pose = geometry_msgs::msg::PoseStamped();
+        geometry_msgs::msg::PoseStamped goal_pose =
+            geometry_msgs::msg::PoseStamped();
         goal_pose.header.frame_id = "base_link";
-        goal_pose.pose.position.x = g->x; //-> for pointer 
+        goal_pose.pose.position.x = g->x; //-> for pointer
         goal_pose.pose.position.y = g->y;
         goal_pose.pose.position.z = g->z;
         goal_pose.header.stamp.sec = 0;
@@ -124,35 +125,69 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         float z_abs = target_point.pose.position.z;
         geometry_msgs::msg::PoseStamped target_to_yaw;
         tf_buffer_->transform(goal_pose, target_to_yaw, "gripper_yaw_origin");
-        geometry_msgs::msg::TransformStamped offset_end_effector= tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector", tf2::TimePointZero);
-        geometry_msgs::msg::TransformStamped end_effector_to_yaw= tf_buffer_->lookupTransform("gripper_yaw", "gripper_end_effector", tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped offset_end_effector =
+            tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector",
+                                        tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped end_effector_to_yaw =
+            tf_buffer_->lookupTransform("gripper_yaw", "gripper_end_effector",
+                                        tf2::TimePointZero);
         float d = end_effector_to_yaw.transform.translation.y;
-        float T_distance = std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) + std::pow(target_to_yaw.pose.position.y, 2));
-        float beta = acos( abs(d)/abs(T_distance));
-        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn = tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw", tf2::TimePointZero);
-        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) + abs(offset_end_effector.transform.translation.x);
-        float x_delta = T_distance*sin(beta);
+        float T_distance =
+            std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) +
+                      std::pow(target_to_yaw.pose.position.y, 2));
+        float beta = acos(abs(d) / abs(T_distance));
+        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =
+            tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw",
+                                        tf2::TimePointZero);
+        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) +
+                         abs(offset_end_effector.transform.translation.x);
+        float x_delta = T_distance * sin(beta);
         float x_abs = x_delta - x_static;
         float t_x = target_to_yaw.pose.position.x;
         float t_y = target_to_yaw.pose.position.y;
-        double tetha;double alpha= atan(abs(t_x) / abs(t_y));
-        if (t_y == 0)
-        {tetha = 0;}
-        else if (t_y >= 0)
-        {tetha = beta - alpha;}
-        else{ tetha = (M_PI - beta-alpha)*-1;}
-        double target_mot_y = tetha *180/M_PI;
-        RCLCPP_INFO(get_logger(),"x.abs : %.6f",x_abs);
-        RCLCPP_INFO(get_logger(),"yaw_angle : %.6f",tetha);
-        RCLCPP_INFO(get_logger(),"z_abs : %.6f",z_abs);
-        
-        return {
+        double tetha;
+        double alpha = atan(abs(t_x) / abs(t_y));
+        if (t_y == 0) {
+          tetha = 0;
+        } else if (t_y >= 0) {
+          tetha = beta - alpha;
+        } else {
+          tetha = (M_PI - beta - alpha) * -1;
+        }
+        double target_mot_y = tetha * 180 / M_PI;
+        RCLCPP_INFO(get_logger(), "x.abs : %.6f", x_abs);
+        RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", tetha);
+        RCLCPP_INFO(get_logger(), "z_abs : %.6f", z_abs);
+        target_mot_x_ = x_abs;
+        target_mot_yaw_ = target_mot_y;
+        target_mot_z_ = z_abs;
+        // return rclcpp_action::GoalResponse::REJECT;
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+      },
+      // Cancel handler
+      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>>)
+          -> rclcpp_action::CancelResponse {
+        cancel_action(true);
+        return rclcpp_action::CancelResponse::ACCEPT;
+      },
+      // Accepted handler
+      [this](
+          std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
+        msgpack::zone zone;
+        std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("MOVE", zone)},
-            {"target_mot_x", msgpack::object(x_abs, zone)},
-            {"target_mot_yaw", msgpack::object(target_mot_y, zone)},
-            {"target_mot_z", msgpack::object(z_abs, zone)},
+            {"target_mot_x", msgpack::object(target_mot_x_, zone)},
+            {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
+            {"target_mot_z", msgpack::object(target_mot_z_, zone)},
 
         };
+        RCLCPP_INFO(
+            get_logger(), "[uuid %s] Starting action %s",
+            rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+            "MOVE");
+
+        handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
+            goal_handle, send_udp_message(data));
       },
       server_options, cb_group_);
 
@@ -179,8 +214,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         return {{"command", msgpack::object("STOP", zone)}};
       },
       server_options, cb_group_);
-  tf_buffer_ =    std::make_unique<tf2_ros::Buffer>(this->get_clock());
-  tf_listener_ =  std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
@@ -287,18 +322,22 @@ void GigatinoROS::start_receive() {
             transf_z.header.frame_id = "gripper_x_origin";
             transf_z.child_frame_id = "gripper_x_dyn";
             tf2::Quaternion q;
-            q.setRPY(0, 0, current_feedback_.stepper_positions[1]);//0=x,1=yaw,2=z
+            q.setRPY(0, 0,
+                     current_feedback_.stepper_positions[1]); // 0=x,1=yaw,2=z
             transf_yaw.transform.rotation.x = q.x();
             transf_yaw.transform.rotation.y = q.y();
             transf_yaw.transform.rotation.z = q.z();
             transf_yaw.transform.rotation.w = q.w();
-            transf_x.transform.translation.x = current_feedback_.stepper_positions[0];
-            transf_z.transform.translation.z = current_feedback_.stepper_positions[2];
-            std::vector< geometry_msgs::msg::TransformStamped > transforms;//function to pack multiple transforms into 1 array
+            transf_x.transform.translation.x =
+                current_feedback_.stepper_positions[0];
+            transf_z.transform.translation.z =
+                current_feedback_.stepper_positions[2];
+            std::vector<geometry_msgs::msg::TransformStamped>
+                transforms; // function to pack multiple transforms into 1 array
             transforms.push_back(transf_x);
             transforms.push_back(transf_yaw);
             transforms.push_back(transf_z);
-            tf_broadcaster_->sendTransform(transforms);    
+            tf_broadcaster_->sendTransform(transforms);
           }
           action_cv_.notify_all();
         }
