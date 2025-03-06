@@ -76,6 +76,12 @@ private:
 
   float gripper_open_pos_;
   float gripper_close_pos_;
+  float max_x_;
+  float max_z_;
+  float max_yaw_;
+  float min_z_;
+  float min_x_;
+  float min_yaw_;
 
   std::thread io_thread_;
   bool io_running_;

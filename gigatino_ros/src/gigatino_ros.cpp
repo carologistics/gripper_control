@@ -55,7 +55,12 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
   gripper_open_pos_ = get_parameter("gripper_open_pos").as_double();
   gripper_close_pos_ = get_parameter("gripper_close_pos").as_double();
-
+  max_z_ = get_parameter("z_max").as_double();
+  min_z_ = get_parameter("z_min").as_double();
+  max_x_ = get_parameter("x_max").as_double();
+  min_x_ = get_parameter("x_min").as_double();
+  max_yaw_ = get_parameter("yaw_max").as_double();
+  min_yaw_ = get_parameter("yaw_min").as_double();
   std::string local_ip_addr = get_parameter("remote_ip_address").as_string();
   std::string remote_ip_addr = get_parameter("remote_ip_address").as_string();
   recv_endpoint_ =
@@ -130,16 +135,16 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         float x_abs = x_delta - x_static;
         float t_x = target_to_yaw.pose.position.x;
         float t_y = target_to_yaw.pose.position.y;
-        float tetha;float alpha= atan(abs(t_x) / abs(t_y));
-        if (t_y = 0)
+        double tetha;double alpha= atan(abs(t_x) / abs(t_y));
+        if (t_y == 0)
         {tetha = 0;}
         else if (t_y >= 0)
         {tetha = beta - alpha;}
         else{ tetha = (M_PI - beta-alpha)*-1;}
-        float target_mot_y = tetha *180/M_PI;
-        RCLCPP_INFO(get_logger(),"x.abs : %.2f",x_abs);
-        RCLCPP_INFO(get_logger(),"yaw_angle : %.2f",tetha);
-        RCLCPP_INFO(get_logger(),"z_abs : %.2f",z_abs);
+        double target_mot_y = tetha *180/M_PI;
+        RCLCPP_INFO(get_logger(),"x.abs : %.6f",x_abs);
+        RCLCPP_INFO(get_logger(),"yaw_angle : %.6f",tetha);
+        RCLCPP_INFO(get_logger(),"z_abs : %.6f",z_abs);
         
         return {
             {"command", msgpack::object("MOVE", zone)},
@@ -289,7 +294,7 @@ void GigatinoROS::start_receive() {
             transf_yaw.transform.rotation.w = q.w();
             transf_x.transform.translation.x = current_feedback_.stepper_positions[0];
             transf_z.transform.translation.z = current_feedback_.stepper_positions[2];
-            std::vector< geometry_msgs::msg::TransformStamped > transforms;//function to pack more transforms into 1 array
+            std::vector< geometry_msgs::msg::TransformStamped > transforms;//function to pack multiple transforms into 1 array
             transforms.push_back(transf_x);
             transforms.push_back(transf_yaw);
             transforms.push_back(transf_z);

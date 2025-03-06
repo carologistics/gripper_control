@@ -23,11 +23,11 @@ def generate_launch_description():
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments = ['--x', '0.47', '--y', '0', '--z', '0', '--yaw', '0', '--pitch', '0', '--roll', '0', '--frame-id', 'gripper_x_origin', '--child-frame-id', 'gripper_x_dyn']
+            arguments = ['--x', '4.544004', '--y', '0', '--z', '0', '--yaw', '0', '--pitch', '0', '--roll', '0', '--frame-id', 'gripper_x_origin', '--child-frame-id', 'gripper_x_dyn']
         ),
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments = ['--x', '0', '--y', '0', '--z', '0', '--yaw', '0.5994171995371126', '--pitch', '0', '--roll', '0', '--frame-id', 'gripper_yaw_origin', '--child-frame-id', 'gripper_yaw']
+            arguments = ['--x', '0', '--y', '0', '--z', '0', '--yaw', '-0.448332', '--pitch', '0', '--roll', '0', '--frame-id', 'gripper_yaw_origin', '--child-frame-id', 'gripper_yaw']
         ),
     ])
