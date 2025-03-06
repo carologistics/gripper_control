@@ -38,12 +38,12 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("max_send_attempts", 3);
   declare_parameter("gripper_open_pos", 180.0);
   declare_parameter("gripper_close_pos", 15.0);
-  declare_parameter("z_min", 2);
-  declare_parameter("z_max", 2);
-  declare_parameter("x_min", 2);
-  declare_parameter("x_max", 2);
-  declare_parameter("yaw_min", 2);
-  declare_parameter("yaw_max", 2);
+  declare_parameter("z_min", 2.0);
+  declare_parameter("z_max", 2.0);
+  declare_parameter("x_min", 2.0);
+  declare_parameter("x_max", 2.0);
+  declare_parameter("yaw_min", 2.0);
+  declare_parameter("yaw_max", 2.0);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
