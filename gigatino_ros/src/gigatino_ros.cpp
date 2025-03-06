@@ -145,8 +145,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         float x_abs = x_delta - x_static;
         float t_x = target_to_yaw.pose.position.x;
         float t_y = target_to_yaw.pose.position.y;
-        double tetha;
-        double alpha = atan(abs(t_x) / abs(t_y));
+        float tetha;
+        float alpha = atan(abs(t_x) / abs(t_y));
         if (t_y == 0) {
           tetha = 0;
         } else if (t_y >= 0) {
@@ -154,13 +154,16 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         } else {
           tetha = (M_PI - beta - alpha) * -1;
         }
-        double target_mot_y = tetha * 180 / M_PI;
+        float target_mot_y = tetha * 180 / M_PI;
         RCLCPP_INFO(get_logger(), "x.abs : %.6f", x_abs);
         RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", tetha);
         RCLCPP_INFO(get_logger(), "z_abs : %.6f", z_abs);
-        target_mot_x_ = x_abs;
-        target_mot_yaw_ = target_mot_y;
-        target_mot_z_ = z_abs;
+        {
+          std::scoped_lock lk(feedback_mtx_);
+          target_mot_x_ = x_abs;
+          target_mot_yaw_ = target_mot_y;
+          target_mot_z_ = z_abs;
+        }
         // return rclcpp_action::GoalResponse::REJECT;
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
       },
@@ -174,13 +177,17 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       [this](
           std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
         msgpack::zone zone;
-        std::map<std::string, msgpack::object> data = {
-            {"command", msgpack::object("MOVE", zone)},
-            {"target_mot_x", msgpack::object(target_mot_x_, zone)},
-            {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
-            {"target_mot_z", msgpack::object(target_mot_z_, zone)},
+        std::map<std::string, msgpack::object> data;
+        {
+          std::scoped_lock lk(feedback_mtx_);
+          data = {
+              {"command", msgpack::object("MOVE", zone)},
+              {"target_mot_x", msgpack::object(target_mot_x_, zone)},
+              {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
+              {"target_mot_z", msgpack::object(target_mot_z_, zone)},
 
-        };
+          };
+        }
         RCLCPP_INFO(
             get_logger(), "[uuid %s] Starting action %s",
             rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
