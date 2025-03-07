@@ -110,10 +110,11 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       this, "gigatino/move",
       // Goal handler
       [this](
-        const rclcpp_action::GoalUUID &,
-        std::shared_ptr<const Move::Goal> g) -> rclcpp_action::GoalResponse {
+          const rclcpp_action::GoalUUID &,
+          std::shared_ptr<const Move::Goal> g) -> rclcpp_action::GoalResponse {
         geometry_msgs::msg::PoseStamped target_point;
-        geometry_msgs::msg::PoseStamped goal_pose =geometry_msgs::msg::PoseStamped();
+        geometry_msgs::msg::PoseStamped goal_pose =
+            geometry_msgs::msg::PoseStamped();
         goal_pose.header.frame_id = "base_link";
         goal_pose.pose.position.x = g->x; //-> for pointer
         goal_pose.pose.position.y = g->y;
@@ -124,13 +125,22 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         float z_abs = target_point.pose.position.z;
         geometry_msgs::msg::PoseStamped target_to_yaw;
         tf_buffer_->transform(goal_pose, target_to_yaw, "gripper_yaw_origin");
-        geometry_msgs::msg::TransformStamped offset_end_effector =tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector",tf2::TimePointZero);
-        geometry_msgs::msg::TransformStamped end_effector_to_yaw =tf_buffer_->lookupTransform("gripper_yaw", "gripper_end_effector",tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped offset_end_effector =
+            tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector",
+                                        tf2::TimePointZero);
+        geometry_msgs::msg::TransformStamped end_effector_to_yaw =
+            tf_buffer_->lookupTransform("gripper_yaw", "gripper_end_effector",
+                                        tf2::TimePointZero);
         float d = end_effector_to_yaw.transform.translation.y;
-        float T_distance =std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) + std::pow(target_to_yaw.pose.position.y, 2));
+        float T_distance =
+            std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) +
+                      std::pow(target_to_yaw.pose.position.y, 2));
         float beta = acos(abs(d) / abs(T_distance));
-        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw",tf2::TimePointZero);
-        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) + abs(offset_end_effector.transform.translation.x);
+        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =
+            tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw",
+                                        tf2::TimePointZero);
+        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) +
+                         abs(offset_end_effector.transform.translation.x);
         float x_delta = T_distance * sin(beta);
         float x_abs = x_delta - x_static;
         float t_x = target_to_yaw.pose.position.x;
@@ -153,20 +163,23 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           target_mot_x_ = x_abs;
           target_mot_yaw_ = target_mot_y;
           target_mot_z_ = z_abs;
-          if (min_x_ < target_mot_x_ < max_x_ or min_z_ < target_mot_z_ < max_z_ or min_yaw_< target_mot_yaw_ < max_yaw_ ){return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;}
+          if ((min_x_ < target_mot_x_ && target_mot_x_ < max_x_) ||
+              (min_z_ < target_mot_z_ && target_mot_z_ < max_z_) ||
+              (min_yaw_ < target_mot_yaw_ && target_mot_yaw_ < max_yaw_)) {
+            return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+          }
         }
         return rclcpp_action::GoalResponse::REJECT;
-        
       },
       // Cancel handler
-      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>>) -> rclcpp_action::CancelResponse {
-        
+      [this](std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>>)
+          -> rclcpp_action::CancelResponse {
         cancel_action(true);
         return rclcpp_action::CancelResponse::ACCEPT;
       },
       // Accepted handler
       [this](
-        std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
+          std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
         msgpack::zone zone;
         std::map<std::string, msgpack::object> data;
         {
