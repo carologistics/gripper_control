@@ -1,19 +1,39 @@
-import rclpy
-import threading
+# Copyright (c) 2025 Carologistics
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import collections
-
+import threading
 import time
+
+import rclpy
+from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import Twist
+from rclpy.action import ActionServer
+from rclpy.action import CancelResponse
+from rclpy.action import GoalResponse
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.action import ActionServer, GoalResponse, CancelResponse
 from rclpy.node import Node
-from tf2_ros import Buffer, TransformListener, TransformBroadcaster
-from geometry_msgs.msg import TransformStamped, Twist
+from tf2_ros import Buffer
+from tf2_ros import TransformBroadcaster
+from tf2_ros import TransformListener
+
 from gripper_msgs.action import Gripper
+
 
 class GripperActionServer(Node):
 
     def __init__(self):
-        super().__init__('gripper_action_server')
+        super().__init__("gripper_action_server")
 
         # TF2 buffer and listener to query transforms
         self.tf_buffer = Buffer()
@@ -26,19 +46,20 @@ class GripperActionServer(Node):
         self._action_server = ActionServer(
             self,
             Gripper,
-            'gripper',
+            "gripper",
             execute_callback=self.execute_callback,
             goal_callback=self.goal_callback,
             cancel_callback=self.cancel_callback,
         )
-    
+
         self._goal_queue = collections.deque()
         self._goal_queue_lock = threading.Lock()
         self._current_goal = None
 
-        self.publisher_ = self.create_publisher(TransformStamped, '/tf', 10)
-        self.cmd_vel_publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.publisher_ = self.create_publisher(TransformStamped, "/tf", 10)
+        self.cmd_vel_publisher = self.create_publisher(Twist, "/cmd_vel", 10)
         self.feedback_timer = None  # Timer for feedback updates
+
     def destroy(self):
         self._action_server.destroy()
         super().destroy_node()
@@ -64,9 +85,9 @@ class GripperActionServer(Node):
             try:
                 # Query the transform
                 transform = self.tf_buffer.lookup_transform(
-                    target_frame='base_link',                # Frame to query
+                    target_frame="base_link",  # Frame to query
                     source_frame=goal_handle.request.frame,  # Reference frame
-                    time=rclpy.time.Time()
+                    time=rclpy.time.Time(),
                 )
 
                 # Calculate feedback
@@ -80,7 +101,8 @@ class GripperActionServer(Node):
                 orientation = transform.transform.rotation
                 self.get_logger().info(
                     f"Relative orientation (base_link -> goal_handle.request.frame): "
-                    f"End-effector orientation: x={orientation.x}, y={orientation.y}, z={orientation.z}, w={orientation.w}"
+                    f"End-effector orientation: x={orientation.x},\
+                    y={orientation.y}, z={orientation.z}, w={orientation.w}"
                 )
                 feedback_msg.position_x = goal_handle.request.x_target - current_position.x
                 feedback_msg.position_y = goal_handle.request.y_target - current_position.y
@@ -99,9 +121,11 @@ class GripperActionServer(Node):
 
                 # Check if the target position is reached (within a small tolerance)
                 tolerance = 0.01  # Define your tolerance
-                if (abs(feedback_msg.position_x) <= tolerance and
-                    abs(feedback_msg.position_y) <= tolerance and
-                    abs(feedback_msg.position_z) <= tolerance):
+                if (
+                    abs(feedback_msg.position_x) <= tolerance
+                    and abs(feedback_msg.position_y) <= tolerance
+                    and abs(feedback_msg.position_z) <= tolerance
+                ):
                     target_reached = True
                     self.feedback_timer.cancel()
 
@@ -111,14 +135,13 @@ class GripperActionServer(Node):
                     stop_cmd_vel.linear.y = 0.0
                     stop_cmd_vel.linear.z = 0.0
                     self.cmd_vel_publisher.publish(stop_cmd_vel)
-            
+
                     goal_handle.succeed()
- 
+
                     self.get_logger().info("Target position reached. Robot stopped.")
                     result = Gripper.Result()
                     result.success = True
                     return result
-
 
                 # Publish the command velocity
                 self.cmd_vel_publisher.publish(cmd_vel)
@@ -139,9 +162,9 @@ class GripperActionServer(Node):
         result.success = True
         return result
 
-    
+
 def main(args=None):
-    
+
     try:
         rclpy.init(args=args)
         gripper_action_server = GripperActionServer()
@@ -153,5 +176,7 @@ def main(args=None):
     finally:
         gripper_action_server.destroy_node()
         rclpy.shutdown()
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     main()

@@ -1,0 +1,481 @@
+// Copyright (c) 2025 Carologistics
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Arduino.h>
+#include <shared_mem_data.h>
+
+// #define DEBUG_VIA_RPC 1
+
+#define SERIAL_OUTPUT 1
+
+#ifdef DEBUG_VIA_RPC
+#include <RPC.h>
+#endif
+
+#include <servos/servos.h>
+#include <stepper_motors/stepper_motors.h>
+
+#include <array>
+
+#define CONTROL_DT 10 // milliseconds
+
+Feedback current_feedback;
+int m4_data_read = -1;
+
+Command current_command;
+bool new_command_received = false;
+
+unsigned long last_loop = 0;
+unsigned long loop_delta = CONTROL_DT;
+
+// this determines the order for the position commands to be interpreted
+// e.g., first motor in this list will be x, second yaw, third z, fourth u
+
+// mot_u is broken as TIM2 is used by us_ticker of mbed-os on M4
+const std::array<StepperMotorSetup *, 3> stepper_setup = {&mot_x, &mot_yaw,
+                                                          &mot_z};
+// const std::array<StepperMotorSetup*,1> stepper_setup = {&mot_x};
+
+// servo_rotation is broken as TIM5 is used by us_ticker of mbed-os on M7
+const std::array<ServoSetup *, 1> servo_setup = {&servo_gripper};
+// const std::array<ServoSetup*,0> servo_setup = {};
+
+bool stepper_positions_reached = false;
+bool servo_positions_reached = false;
+
+void mot_x_enc_isr() { mot_x.update_abs_position(); }
+void mot_yaw_enc_isr() { mot_yaw.update_abs_position(); }
+void mot_z_enc_isr() { mot_z.update_abs_position(); }
+
+void mot_u_enc_isr() { mot_u.update_abs_position(); }
+
+void mot_x_endstop_isr() { mot_x.endstop_hit(); }
+
+void mot_yaw_endstop_isr() { mot_yaw.endstop_hit(); }
+
+void mot_z_endstop_isr() { mot_z.endstop_hit(); }
+
+void mot_u_endstop_isr() { mot_u.endstop_hit(); }
+
+void attach_interrupts() {
+
+  pinMode(mot_x.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(mot_x.encoder_n_pin), mot_x_enc_isr,
+                  RISING);
+
+  pinMode(mot_yaw.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(mot_yaw.encoder_n_pin), mot_yaw_enc_isr,
+                  RISING);
+
+  pinMode(mot_z.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(mot_z.encoder_n_pin), mot_z_enc_isr,
+                  RISING);
+
+  pinMode(mot_u.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(mot_u.encoder_n_pin), mot_u_enc_isr,
+                  RISING);
+
+  pinMode(mot_x.endstop_pin, INPUT);
+  if (mot_x.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(mot_x.endstop_pin), mot_x_endstop_isr,
+                    FALLING);
+  } else {
+    attachInterrupt(digitalPinToInterrupt(mot_x.endstop_pin), mot_x_endstop_isr,
+                    RISING);
+  }
+
+  pinMode(mot_yaw.endstop_pin, INPUT);
+  if (mot_yaw.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(mot_yaw.endstop_pin),
+                    mot_yaw_endstop_isr, FALLING);
+  } else {
+    attachInterrupt(digitalPinToInterrupt(mot_yaw.endstop_pin),
+                    mot_yaw_endstop_isr, RISING);
+  }
+  pinMode(mot_z.endstop_pin, INPUT);
+  if (mot_z.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(mot_z.endstop_pin), mot_z_endstop_isr,
+                    FALLING);
+  } else {
+    attachInterrupt(digitalPinToInterrupt(mot_z.endstop_pin), mot_z_endstop_isr,
+                    RISING);
+  }
+
+  pinMode(mot_u.endstop_pin, INPUT);
+  if (mot_u.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(mot_u.endstop_pin), mot_u_endstop_isr,
+                    FALLING);
+  } else {
+    attachInterrupt(digitalPinToInterrupt(mot_u.endstop_pin), mot_u_endstop_isr,
+                    RISING);
+  }
+}
+
+void gather_feedback(void) {
+  for (size_t i = 0; i < stepper_setup.size(); i++) {
+    current_feedback.stepper_positions[i] =
+        stepper_setup[i]->steps_to_unit(stepper_setup[i]->get_absolute_pos());
+    current_feedback.stepper_directions[i] = stepper_setup[i]->direction;
+    current_feedback.stepper_endstops[i] =
+        stepper_setup[i]->invert_endstop
+            ? !static_cast<bool>(digitalRead(stepper_setup[i]->endstop_pin))
+            : static_cast<bool>(digitalRead(stepper_setup[i]->endstop_pin));
+  }
+}
+
+void send_feedback(void) { put_to_m4(&current_feedback, sizeof(Feedback)); }
+
+void read_command(void) {
+  m4_data_read = get_from_m4(&current_command, sizeof(Command));
+  if (m4_data_read > 0) {
+    new_command_received = true;
+    current_feedback.busy = true;
+  }
+}
+
+inline void calibrate(void) {
+  bool calibrate_busy = false;
+  for (size_t i = 0; i < stepper_setup.size(); i++) {
+    calibrate_busy = calibrate_busy | !current_feedback.stepper_endstops[i];
+  }
+  if (!calibrate_busy) {
+    current_feedback.busy = false;
+    current_feedback.referenced = true;
+    new_command_received = false;
+#ifdef SERIAL_OUTPUT
+    Serial.println("Calibrate done");
+#endif
+    return;
+  }
+  if (new_command_received) {
+#ifdef SERIAL_OUTPUT
+    Serial.println("Calibrate");
+#endif
+    new_command_received = false;
+
+    for (size_t i = 0; i < stepper_setup.size(); i++) {
+      if (!current_feedback.stepper_endstops[i]) {
+        stepper_setup[i]->reference();
+      }
+    }
+  }
+}
+
+inline bool servo_approx_angle(float dt) {
+  bool target_reached = true;
+  for (size_t i = 0; i < servo_setup.size(); i++) {
+    if (current_command.servo_mask & (1 << i)) {
+      if (current_command.servo_positions[i] != servo_setup[i]->approx_angle) {
+        target_reached = false;
+        if (current_command.servo_positions[i] > servo_setup[i]->approx_angle) {
+          servo_setup[i]->approx_angle =
+              max(current_command.servo_positions[i],
+                  servo_setup[i]->approx_angle + servo_setup[i]->speed * dt);
+        } else {
+          servo_setup[i]->approx_angle =
+              min(current_command.servo_positions[i],
+                  servo_setup[i]->approx_angle - servo_setup[i]->speed * dt);
+        }
+      } else {
+        continue;
+      }
+    }
+  }
+  return target_reached;
+}
+
+inline bool stepper_move(float dt) {
+  bool target_reached = true;
+  for (size_t i = 0; i < stepper_setup.size(); i++) {
+    if (current_command.stepper_mask & (1 << i)) {
+      if (abs(current_command.stepper_positions[i] -
+              current_feedback.stepper_positions[i]) >
+          stepper_setup[i]->precision_threshold) {
+        target_reached = false;
+      } else {
+        stepper_setup[i]->set_speed(0);
+        continue;
+      }
+      float speed = stepper_setup[i]->motion_controller.compute(
+          current_command.stepper_positions[i],
+          current_feedback.stepper_positions[i], dt);
+      if (speed > 0.f) {
+        stepper_setup[i]->set_dir(stepper_setup[i]->positive_dir);
+      } else {
+        stepper_setup[i]->set_dir(!stepper_setup[i]->positive_dir);
+      }
+      speed = abs(speed);
+      speed = stepper_setup[i]->unit_to_steps(speed);
+
+      stepper_setup[i]->set_speed(speed);
+    }
+  }
+  return target_reached;
+}
+
+void execute_command(void) {
+  if (current_feedback.busy) {
+    switch (current_command.command_id) {
+    case CommandID::NO_COMMAND:
+      current_feedback.busy = false;
+      break;
+    case CommandID::CALIBRATE:
+      // observe whether all endstops are hit which stops calibration
+      calibrate();
+      break;
+
+    case CommandID::STOP:
+#ifdef SERIAL_OUTPUT
+      Serial.println("Stop");
+#endif
+      for (const auto &mot : stepper_setup) {
+        mot->set_speed(0);
+      }
+      current_feedback.busy = false;
+      new_command_received = false;
+      break;
+    case CommandID::MOVE: {
+      if (new_command_received) {
+#ifdef SERIAL_OUTPUT
+        Serial.println("Move start");
+#endif
+        for (size_t i = 0; i < servo_setup.size(); i++) {
+          if (current_command.servo_mask & (1 << i)) {
+            servo_setup[i]->set_position(current_command.servo_positions[i]);
+          }
+        }
+        stepper_positions_reached =
+            static_cast<bool>(current_command.stepper_mask);
+        servo_positions_reached = static_cast<bool>(current_command.servo_mask);
+
+        for (size_t i = 0; i < stepper_setup.size(); i++) {
+          stepper_setup[i]->motion_controller.set_dist(
+              current_command.stepper_positions[i] -
+              current_feedback.stepper_positions[i]);
+        }
+        new_command_received = false;
+      }
+
+      float dt_sec = loop_delta / 1000.0f;
+      stepper_positions_reached = stepper_move(dt_sec);
+      servo_positions_reached = servo_approx_angle(dt_sec);
+      if (stepper_positions_reached && servo_positions_reached) {
+#ifdef SERIAL_OUTPUT
+        Serial.println("Move done");
+#endif
+        current_feedback.busy = false;
+        for (const auto &mot : stepper_setup) {
+          mot->pid_controller.reset();
+
+          mot->motion_controller.reset();
+        }
+      }
+      break;
+    }
+    case CommandID::PID_UPDATE:
+      new_command_received = false;
+      for (size_t i = 0; i < stepper_setup.size(); i++) {
+        stepper_setup[i]->set_speed(0);
+        if (current_command.pid_motor_id == i) {
+#ifdef SERIAL_OUTPUT
+          Serial.print("PID Update for motor ");
+          Serial.print(i);
+#endif
+          if (current_command.pid_param_mask & 1) {
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New P: ");
+#endif
+            stepper_setup[i]->pid_controller.Kp_ =
+                current_command.pid_params[0];
+            Serial.print(stepper_setup[i]->pid_controller.Kp_);
+          }
+          if (current_command.pid_param_mask & (1 << 1)) {
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New I: ");
+#endif
+            stepper_setup[i]->pid_controller.Ki_ =
+                current_command.pid_params[1];
+            Serial.print(stepper_setup[i]->pid_controller.Ki_);
+          }
+          if (current_command.pid_param_mask & (1 << 2)) {
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New D: ");
+#endif
+            stepper_setup[i]->pid_controller.Kd_ =
+                current_command.pid_params[2];
+#ifdef SERIAL_OUTPUT
+            Serial.print(stepper_setup[i]->pid_controller.Kd_);
+#endif
+          }
+          stepper_setup[i]->pid_controller.integral_ = 0;
+          stepper_setup[i]->pid_controller.prev_error_ = 0;
+          stepper_setup[i]->pid_controller.prev_speed_ = 0;
+        }
+      }
+#ifdef SERIAL_OUTPUT
+      Serial.println("PID Update");
+#endif
+      new_command_received = false;
+      current_feedback.busy = false;
+      break;
+
+    case CommandID::S_CONTROLLER_UPDATE:
+      new_command_received = false;
+      for (size_t i = 0; i < stepper_setup.size(); i++) {
+        stepper_setup[i]->set_speed(0);
+        if (current_command.motion_controller_motor_id == i) {
+#ifdef SERIAL_OUTPUT
+          Serial.print("S Controller Update for motor ");
+          Serial.print(i);
+#endif
+          if (current_command.pid_param_mask & 1) {
+
+            stepper_setup[i]->motion_controller.max_speed_ =
+                current_command.motion_controller_params[0];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New max speed: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_speed_);
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 1)) {
+            stepper_setup[i]->motion_controller.max_accel_ =
+                current_command.motion_controller_params[1];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New accel: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_accel_);
+
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 2)) {
+
+            stepper_setup[i]->motion_controller.max_jerk_ =
+                current_command.motion_controller_params[2];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New jerk: ");
+            Serial.print(stepper_setup[i]->motion_controller.max_jerk_);
+#endif
+          }
+        }
+      }
+#ifdef SERIAL_OUTPUT
+      Serial.println(" Motion Controller Update");
+#endif
+      new_command_received = false;
+      current_feedback.busy = false;
+      break;
+    }
+  }
+}
+
+void setup() {
+#ifdef SERIAL_OUTPUT
+  Serial.begin(115200);
+#endif
+  /**
+   * We need to boot the M4 right away, for some reason it resets some registers
+   * that it should not be resetting.
+   * In Particular, TIM2 (used for mot_u encoder) is affected by this...
+   */
+  HSEM_Init();
+  MPU_Config();
+  core_share_init();
+  bootM4();
+
+  GPIOA->AFR[1] = 0x0; // was on non-default values for some reason
+
+  delay(4000); // arbirtrary, mainly to give some time before bricking the
+               // firmware
+
+  current_command.command_id = CommandID::NO_COMMAND;
+
+  for (const auto &mot : stepper_setup) {
+    mot->init();
+  }
+#ifdef SERIAL_OUTPUT
+  Serial.println("motor setup done");
+#endif
+#ifdef DEBUG_VIA_RPC
+  RPC.begin();
+#endif
+  // gather feedback once before attaching interrupts to have sensible values
+  gather_feedback();
+
+  attach_interrupts();
+#ifdef SERIAL_OUTPUT
+  Serial.println("interrupts done");
+#endif
+
+  last_loop = millis();
+}
+
+/**
+ * The following steps are executed with a fixed time step of CONTROL_DT:
+ * 1. gather feedback
+ * 2. send feedback to m4 (ethernet)
+ * 1. check for new command from m4 (ethernet)
+ * 2. execute current command
+ */
+void loop() {
+  if (millis() < last_loop + CONTROL_DT) {
+    return;
+  }
+  loop_delta = millis() - last_loop;
+  last_loop = millis();
+#ifdef DEBUG_VIA_RPC
+  // step 0: write RPC buffer to serial
+  String buffer = "";
+  while (RPC.available()) {
+
+    buffer += (char)RPC.read(); // Fill the buffer with characters
+  }
+  if (buffer.length() > 0) {
+
+    Serial.print(buffer);
+  }
+#endif
+
+  // step 1: check feedback and write it in current_feedback
+  gather_feedback();
+  // step 2: send feedback:
+  send_feedback();
+  // step 3: check for new command
+  read_command();
+
+#ifdef SERIAL_OUTPUT
+  static unsigned long last_called = millis();
+  if (last_called + 100 < millis()) {
+
+    last_called = millis();
+    if (new_command_received) {
+      Serial.println("new command received");
+    }
+    for (size_t i = 0; i < stepper_setup.size(); i++) {
+      Serial.print("mot ");
+      Serial.print(i);
+      Serial.print(" enc: ");
+      Serial.print(stepper_setup[i]->encoder_a.get_timer()->CNT);
+      Serial.print(" psc: ");
+      Serial.print(stepper_setup[i]->encoder_a.get_timer()->PSC);
+      Serial.print(" stop: ");
+      Serial.print(current_feedback.stepper_endstops[i]);
+      Serial.print(" offset: ");
+      Serial.print(stepper_setup[i]->abs_position_step_offset);
+      Serial.print("pos: ");
+      Serial.println(current_feedback.stepper_positions[i]);
+    }
+  }
+#endif
+
+  execute_command();
+}

@@ -1,0 +1,8 @@
+bool OPEN = true
+bool CLOSED = false
+# Goal
+bool open
+---
+# Result
+string message
+---

@@ -1,0 +1,15 @@
+bool OPEN = true
+bool CLOSED = false
+# Goal
+bool relative
+float32 x
+float32 y
+float32 z
+string target_frame
+bool gripper_state
+bool use_gripper
+---
+# Result
+string message
+---
+# Feedback

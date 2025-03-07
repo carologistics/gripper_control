@@ -9,7 +9,7 @@ after that run the action server by giving the command.
 ```bash
 ros2 run gripper_tf_simulator gripper_action_server
 ```
-to test whether the server works you may run the action client. 
+to test whether the server works you may run the action client.
 ```bash
 ros2 run gripper_tf_simulator gripper_action_client
 ```
