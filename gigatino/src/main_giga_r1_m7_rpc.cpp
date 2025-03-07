@@ -195,6 +195,56 @@ inline bool servo_approx_angle(float dt) {
   return target_reached;
 }
 
+inline bool servo_move_const(float dt) {
+  bool target_reached = true;
+  for (size_t i = 0; i < servo_setup.size(); i++) {
+    if (current_command.servo_mask & (1 << i)) {
+      if (current_command.servo_positions[i] != servo_setup[i]->approx_angle) {
+        target_reached = false;
+        if (current_command.servo_positions[i] > servo_setup[i]->approx_angle) {
+          servo_setup[i]->approx_angle =
+              max(current_command.servo_positions[i],
+                  servo_setup[i]->approx_angle + servo_setup[i]->speed * dt);
+        } else {
+          servo_setup[i]->approx_angle =
+              min(current_command.servo_positions[i],
+                  servo_setup[i]->approx_angle - servo_setup[i]->speed * dt);
+        }
+        servo_setup[i]->set_position(servo_setup[i]->approx_angle);
+      } else {
+        continue;
+      }
+    }
+  }
+  return target_reached;
+}
+
+inline bool stepper_move_const(float dt) {
+  bool target_reached = true;
+  for (size_t i = 0; i < stepper_setup.size(); i++) {
+    if (current_command.stepper_mask & (1 << i)) {
+      if (abs(current_command.stepper_positions[i] -
+              current_feedback.stepper_positions[i]) >
+          stepper_setup[i]->precision_threshold) {
+        target_reached = false;
+      } else {
+        stepper_setup[i]->set_speed(0);
+        continue;
+      }
+      bool positive_dir = current_command.stepper_positions[i] -
+                          current_feedback.stepper_positions[i];
+      if (positive_dir) {
+        stepper_setup[i]->set_dir(stepper_setup[i]->positive_dir);
+      } else {
+        stepper_setup[i]->set_dir(!stepper_setup[i]->positive_dir);
+      }
+      stepper_setup[i]->set_speed(
+          stepper_setup[i]->unit_to_steps(stepper_setup[i]->reference_speed));
+    }
+  }
+  return target_reached;
+}
+
 inline bool stepper_move(float dt) {
   bool target_reached = true;
   for (size_t i = 0; i < stepper_setup.size(); i++) {
@@ -260,9 +310,9 @@ void execute_command(void) {
         servo_positions_reached = static_cast<bool>(current_command.servo_mask);
 
         for (size_t i = 0; i < stepper_setup.size(); i++) {
-          stepper_setup[i]->motion_controller.set_dist(
-              current_command.stepper_positions[i] -
-              current_feedback.stepper_positions[i]);
+          stepper_setup[i]->motion_controller.plan_curve(
+              current_feedback.stepper_positions[i],
+              current_command.stepper_positions[i]);
         }
         new_command_received = false;
       }
@@ -339,31 +389,49 @@ void execute_command(void) {
           Serial.print("S Controller Update for motor ");
           Serial.print(i);
 #endif
-          if (current_command.pid_param_mask & 1) {
+          if (current_command.pid_param_mask & (1 << 0)) {
+
+            stepper_setup[i]->motion_controller.min_speed_ =
+                current_command.motion_controller_params[0];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New min speed: ");
+            Serial.print(stepper_setup[i]->motion_controller.min_speed_);
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 1)) {
 
             stepper_setup[i]->motion_controller.max_speed_ =
-                current_command.motion_controller_params[0];
+                current_command.motion_controller_params[1];
 #ifdef SERIAL_OUTPUT
             Serial.print(" New max speed: ");
             Serial.print(stepper_setup[i]->motion_controller.max_speed_);
 #endif
           }
-          if (current_command.pid_param_mask & (1 << 1)) {
+          if (current_command.pid_param_mask & (1 << 2)) {
             stepper_setup[i]->motion_controller.max_accel_ =
-                current_command.motion_controller_params[1];
+                current_command.motion_controller_params[2];
 #ifdef SERIAL_OUTPUT
             Serial.print(" New accel: ");
             Serial.print(stepper_setup[i]->motion_controller.max_accel_);
 
 #endif
           }
-          if (current_command.pid_param_mask & (1 << 2)) {
+          if (current_command.pid_param_mask & (1 << 3)) {
 
             stepper_setup[i]->motion_controller.max_jerk_ =
-                current_command.motion_controller_params[2];
+                current_command.motion_controller_params[3];
 #ifdef SERIAL_OUTPUT
             Serial.print(" New jerk: ");
             Serial.print(stepper_setup[i]->motion_controller.max_jerk_);
+#endif
+          }
+          if (current_command.pid_param_mask & (1 << 4)) {
+
+            stepper_setup[i]->motion_controller.short_dist_ =
+                current_command.motion_controller_params[4];
+#ifdef SERIAL_OUTPUT
+            Serial.print(" New short dist: ");
+            Serial.print(stepper_setup[i]->motion_controller.short_dist_);
 #endif
           }
         }
@@ -374,6 +442,27 @@ void execute_command(void) {
       new_command_received = false;
       current_feedback.busy = false;
       break;
+    case CommandID::CONST_SPEED: {
+      if (new_command_received) {
+#ifdef SERIAL_OUTPUT
+        Serial.println("Const speed start");
+#endif
+        stepper_positions_reached =
+            static_cast<bool>(current_command.stepper_mask);
+        servo_positions_reached = static_cast<bool>(current_command.servo_mask);
+        new_command_received = false;
+      }
+      float dt_sec = loop_delta / 1000.0f;
+      stepper_positions_reached = stepper_move_const(dt_sec);
+      servo_positions_reached = servo_move_const(dt_sec);
+      if (stepper_positions_reached && servo_positions_reached) {
+#ifdef SERIAL_OUTPUT
+        Serial.println("Move done");
+#endif
+        current_feedback.busy = false;
+      }
+      break;
+    }
     }
   }
 }
@@ -460,19 +549,45 @@ void loop() {
     if (new_command_received) {
       Serial.println("new command received");
     }
-    for (size_t i = 0; i < stepper_setup.size(); i++) {
+    for (size_t i = 0; i < 1; i++) {
       Serial.print("mot ");
       Serial.print(i);
       Serial.print(" enc: ");
       Serial.print(stepper_setup[i]->encoder_a.get_timer()->CNT);
-      Serial.print(" psc: ");
-      Serial.print(stepper_setup[i]->encoder_a.get_timer()->PSC);
-      Serial.print(" stop: ");
-      Serial.print(current_feedback.stepper_endstops[i]);
-      Serial.print(" offset: ");
-      Serial.print(stepper_setup[i]->abs_position_step_offset);
-      Serial.print("pos: ");
-      Serial.println(current_feedback.stepper_positions[i]);
+      // Serial.print(" psc: ");
+      // Serial.print(stepper_setup[i]->encoder_a.get_timer()->PSC);
+      // Serial.print(" stop: ");
+      // Serial.print(current_feedback.stepper_endstops[i]);
+      // Serial.print(" offset: ");
+      // Serial.print(stepper_setup[i]->abs_position_step_offset);
+      Serial.print(" pos: ");
+      Serial.print(current_feedback.stepper_positions[i]);
+      Serial.print(" target: ");
+      Serial.print(current_command.stepper_positions[i]);
+      Serial.print(" peak: ");
+      Serial.print(stepper_setup[i]->motion_controller.peak_speed_);
+      Serial.print(" accel: ");
+      Serial.print(stepper_setup[i]->motion_controller.accel_);
+      Serial.print(" delta: ");
+      Serial.print(loop_delta, 8);
+      Serial.print(" phase: ");
+      Serial.print(stepper_setup[i]->motion_controller.curr_phase_);
+      Serial.print(" speed: ");
+      Serial.println(stepper_setup[i]->motion_controller.speed_);
+      Serial.print(" p1: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_1_);
+      Serial.print(" p2: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_2_);
+      Serial.print(" p3: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_3_);
+      Serial.print(" p4: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_4_);
+      Serial.print(" p5: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_5_);
+      Serial.print(" p6: ");
+      Serial.print(stepper_setup[i]->motion_controller.dist_phase_6_);
+      Serial.print(" p7: ");
+      Serial.println(stepper_setup[i]->motion_controller.dist_phase_7_);
     }
   }
 #endif

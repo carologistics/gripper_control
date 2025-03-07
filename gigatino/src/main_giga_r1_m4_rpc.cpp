@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <shared_mem_data.h>
 
 // #define DEBUG_VIA_RPC 1
@@ -176,10 +175,32 @@ bool load_command_from_json(JsonDocument &doc) {
     current_command.motion_controller_motor_id = mot_index;
     current_command.motion_controller_param_mask = 0;
     int counter = 0;
-    for (auto &val : {"max_speed", "max_accel", "max_jerk"}) {
+    for (auto &val :
+         {"min_speed", "max_speed", "max_accel", "max_jerk", "short_dist"}) {
       if (doc[val].is<float>()) {
         current_command.motion_controller_param_mask |= 1 << counter;
         current_command.motion_controller_params[counter] = doc[val];
+      }
+      counter++;
+    }
+  } else if (doc["command"] == "CONST_SPEED") {
+    current_command.command_id = CommandID::CONST_SPEED;
+    current_command.stepper_mask = 0;
+    current_command.servo_mask = 0;
+    int counter = 0;
+    for (auto &val :
+         {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
+      if (doc[val].is<float>()) {
+        current_command.stepper_mask |= 1 << counter;
+        current_command.stepper_positions[counter] = doc[val];
+      }
+      counter++;
+    }
+    counter = 0;
+    for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
+      if (doc[val].is<float>()) {
+        current_command.servo_mask |= 1 << counter;
+        current_command.servo_positions[counter] = doc[val];
       }
       counter++;
     }

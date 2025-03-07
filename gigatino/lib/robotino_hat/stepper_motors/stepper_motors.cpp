@@ -107,7 +107,7 @@ void StepperMotorSetup::endstop_hit(void) {
 
 void StepperMotorSetup::reference(void) {
   set_dir(reference_dir);
-  set_speed(reference_speed);
+  set_speed(unit_to_steps(reference_speed));
 }
 
 float StepperMotorSetup::steps_to_unit(float steps) {
@@ -150,8 +150,9 @@ StepperMotorSetup mot_x = {
     .precision_threshold = MOT_X_PRECISION_THRESHOLD,
     .pid_controller = {MOT_X_PID_P, MOT_X_PID_I, MOT_X_PID_D, MOT_X_MAX_ACCEL,
                        MOT_X_MAX_SPEED, MOT_X_MIN_SPEED},
-    .motion_controller = {MOT_X_MOTION_MAX_SPEED, MOT_X_MOTION_MAX_ACCEL,
-                          MOT_X_MOTION_MAX_JERK},
+    .motion_controller = {MOT_X_MOTION_MIN_SPEED, MOT_X_MOTION_MAX_SPEED,
+                          MOT_X_MOTION_MAX_ACCEL, MOT_X_MOTION_MAX_JERK,
+                          MOT_X_MOTION_SHORT_DIST},
 };
 
 StepperMotorSetup mot_yaw = {
@@ -184,8 +185,9 @@ StepperMotorSetup mot_yaw = {
     .precision_threshold = MOT_YAW_PRECISION_THRESHOLD,
     .pid_controller = {MOT_YAW_PID_P, MOT_YAW_PID_I, MOT_YAW_PID_D,
                        MOT_YAW_MAX_ACCEL, MOT_YAW_MAX_SPEED, MOT_YAW_MIN_SPEED},
-    .motion_controller = {MOT_YAW_MOTION_MAX_SPEED, MOT_YAW_MOTION_MAX_ACCEL,
-                          MOT_YAW_MOTION_MAX_JERK}};
+    .motion_controller = {MOT_YAW_MOTION_MIN_SPEED, MOT_YAW_MOTION_MAX_SPEED,
+                          MOT_YAW_MOTION_MAX_ACCEL, MOT_YAW_MOTION_MAX_JERK,
+                          MOT_YAW_MOTION_SHORT_DIST}};
 
 StepperMotorSetup mot_z = {
     .pwm = {PortID::PORT_B, 8, MOT_Z_PWM_PIN, TimerID::ID_TIM16,
@@ -217,8 +219,9 @@ StepperMotorSetup mot_z = {
     .precision_threshold = MOT_Z_PRECISION_THRESHOLD,
     .pid_controller = {MOT_Z_PID_P, MOT_Z_PID_I, MOT_Z_PID_D, MOT_Z_MAX_ACCEL,
                        MOT_Z_MAX_SPEED, MOT_Z_MIN_SPEED},
-    .motion_controller = {MOT_Z_MOTION_MAX_SPEED, MOT_Z_MOTION_MAX_ACCEL,
-                          MOT_Z_MOTION_MAX_JERK}};
+    .motion_controller = {MOT_Z_MOTION_MIN_SPEED, MOT_Z_MOTION_MAX_SPEED,
+                          MOT_Z_MOTION_MAX_ACCEL, MOT_Z_MOTION_MAX_JERK,
+                          MOT_Z_MOTION_SHORT_DIST}};
 
 StepperMotorSetup mot_u = {
     .pwm = {PortID::PORT_B, 9, MOT_U_PWM_PIN, TimerID::ID_TIM17,
@@ -250,5 +253,6 @@ StepperMotorSetup mot_u = {
     .precision_threshold = MOT_U_PRECISION_THRESHOLD,
     .pid_controller = {MOT_U_PID_P, MOT_U_PID_I, MOT_U_PID_D, MOT_U_MAX_ACCEL,
                        MOT_U_MAX_SPEED, MOT_U_MIN_SPEED},
-    .motion_controller = {MOT_U_MOTION_MAX_SPEED, MOT_U_MOTION_MAX_ACCEL,
-                          MOT_U_MOTION_MAX_JERK}};
+    .motion_controller = {MOT_U_MOTION_MIN_SPEED, MOT_U_MOTION_MAX_SPEED,
+                          MOT_U_MOTION_MAX_ACCEL, MOT_U_MOTION_MAX_JERK,
+                          MOT_U_MOTION_SHORT_DIST}};
