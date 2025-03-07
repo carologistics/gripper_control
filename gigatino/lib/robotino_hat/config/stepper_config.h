@@ -126,10 +126,10 @@
 #define MOT_Z_INVERT_ENDSTOP true
 #define MOT_U_INVERT_ENDSTOP true
 
-// in steps per seconds
-#define MOT_X_REFERENCE_SPEED 200
-#define MOT_YAW_REFERENCE_SPEED 600
-#define MOT_Z_REFERENCE_SPEED 100
-#define MOT_U_REFERENCE_SPEED 200
+// in units per second
+#define MOT_X_REFERENCE_SPEED 50
+#define MOT_YAW_REFERENCE_SPEED 30
+#define MOT_Z_REFERENCE_SPEED 50
+#define MOT_U_REFERENCE_SPEED 50
 
 #endif // STEPPER_CONFIG_H_

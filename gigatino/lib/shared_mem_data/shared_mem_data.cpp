@@ -188,7 +188,7 @@ int put_to_m7(const void *data, const int size) {
   }
 
   /* Ensure the data size fits within the shared buffer */
-  if (size > M4_BUFFER_SIZE * sizeof(int)) {
+  if (size > static_cast<int>(M4_BUFFER_SIZE * sizeof(int))) {
     /* Release semaphore before returning */
     HAL_HSEM_Release(M4_SEMAPHORE_INDEX, CORE_ID);
     return -1; // Data size exceeds buffer capacity
