@@ -19,7 +19,6 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.actions import GroupAction
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -112,10 +111,15 @@ def launch_with_context(context, *args, **kwargs):
         if None in [translation, rotation, frame_id, child_frame_id]:
             static_transform_publishers.append(LogInfo(msg="[WARN] Missing key(s) in transform. Skipping..."))
             continue
+        import tf_transformations as tf
+
+        tf.quaternion_from_euler(rotation[0], rotation[1], rotation[2])
+
         static_transform_publisher_node = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             output="screen",
+            name="tf_" + transform,
             arguments=[
                 "--x",
                 str(translation[0]),
@@ -135,16 +139,23 @@ def launch_with_context(context, *args, **kwargs):
                 child_frame_id,
             ],
         )
+        # static_transform_publisher_node = ComposableNode(
+        #       name="tf_" + transform,
+        #       package="tf2_ros",
+        #       plugin="tf2_ros::StaticTransformBroadcasterNode",
+        #       parameters=[{"translation.x": translation[0],
+        #                    "translation.y": translation[1],
+        #                    "translation.z": translation[2],
+        #                    "rotation.x": quaternion[0],
+        #                    "rotation.y": quaternion[1],
+        #                    "rotation.z": quaternion[2],
+        #                    "rotation.w": quaternion[3],
+        #                    "frame": frame_id,
+        #                    "child_frame_id": child_frame_id,
+        #                    }],
+        # )
         static_transform_publishers.append(static_transform_publisher_node)
     # container = ComposableNodeContainer(
-    container = ComposableNodeContainer(
-        name="gigatino_container",
-        namespace="",
-        package="rclcpp_components",
-        executable="component_container_mt",
-        output="screen",  # both
-        emulate_tty=True,
-    )
     mockup_args = {}
     mockup_script = []
     if mockup == "true":
@@ -160,6 +171,13 @@ def launch_with_context(context, *args, **kwargs):
         ]
         mockup_args = {"local_ip_address": "127.0.0.1", "remote_ip_address": "127.0.0.1"}
 
+    container = ComposableNodeContainer(
+        name="gigatino_container",
+        namespace="/",
+        package="rclcpp_components",
+        executable="component_container_mt",
+        output="screen",  # both
+    )
     load_composable_nodes = LoadComposableNodes(
         target_container="gigatino_container",
         composable_node_descriptions=[
@@ -175,15 +193,9 @@ def launch_with_context(context, *args, **kwargs):
                 name="gigatino_ros",
                 parameters=[config_file, mockup_args],
             ),
-            # ComposableNode(
-            #    package="tf2_ros",
-            #    plugin="tf2_ros::StaticTransformBroadcasterNode",
-            #    name="gigatino_transform",
-            #    parameters=[{"translation.x": 10}],
-            # ),
-        ],
+        ],  # + static_transform_publishers,
     )
-    return [container, load_composable_nodes] + mockup_script + [GroupAction(actions=static_transform_publishers)]
+    return [container, load_composable_nodes] + mockup_script + static_transform_publishers
 
 
 def generate_launch_description():
