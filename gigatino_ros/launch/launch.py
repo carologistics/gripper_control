@@ -147,7 +147,7 @@ def launch_with_context(context, *args, **kwargs):
     )
     mockup_args = {}
     mockup_script = []
-    if mockup == "True":
+    if mockup == "true":
         mockup_script = [
             Node(
                 package="gigatino_ros",
@@ -197,7 +197,7 @@ def generate_launch_description():
 
     declare_namespace_ = DeclareLaunchArgument("namespace", default_value="", description="Default namespace")
 
-    declare_add_mockup_ = DeclareLaunchArgument("mockup", default_value="false", description="Default namespace")
+    declare_add_mockup_ = DeclareLaunchArgument("mockup", default_value="true", description="Default namespace")
 
     declare_gigatino_ros_config_ = DeclareLaunchArgument(
         "gigatino_config",
