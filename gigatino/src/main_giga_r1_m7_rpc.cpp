@@ -491,6 +491,9 @@ void setup() {
   for (const auto &mot : stepper_setup) {
     mot->init();
   }
+  for (const auto &servo : servo_setup) {
+    servo->init();
+  }
 #ifdef SERIAL_OUTPUT
   Serial.println("motor setup done");
 #endif

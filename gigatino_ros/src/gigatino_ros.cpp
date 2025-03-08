@@ -61,12 +61,16 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   min_x_ = get_parameter("x_min").as_double();
   max_yaw_ = get_parameter("yaw_max").as_double();
   min_yaw_ = get_parameter("yaw_min").as_double();
-  std::string local_ip_addr = get_parameter("remote_ip_address").as_string();
+  std::string local_ip_addr = get_parameter("local_ip_address").as_string();
   std::string remote_ip_addr = get_parameter("remote_ip_address").as_string();
+  RCLCPP_INFO(get_logger(), "remote address %s and port %i",
+              local_ip_addr.c_str(), get_parameter("recv_port").as_int());
   recv_endpoint_ =
       udp::endpoint(boost::asio::ip::address::from_string(local_ip_addr),
                     get_parameter("recv_port").as_int());
 
+  RCLCPP_INFO(get_logger(), "Remote address %s and port %i",
+              remote_ip_addr.c_str(), get_parameter("send_port").as_int());
   send_endpoint_ =
       udp::endpoint(boost::asio::ip::address::from_string(remote_ip_addr),
                     get_parameter("send_port").as_int());
