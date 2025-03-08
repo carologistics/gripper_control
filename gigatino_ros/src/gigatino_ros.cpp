@@ -189,23 +189,54 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           std::shared_ptr<rclcpp_action::ServerGoalHandle<Move>> goal_handle) {
         msgpack::zone zone;
         std::map<std::string, msgpack::object> data;
+        bool move_x_first = false;
         {
           std::scoped_lock lk(feedback_mtx_);
-          data = {
-              {"command", msgpack::object("MOVE", zone)},
-              {"target_mot_x", msgpack::object(target_mot_x_, zone)},
-              {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
-              {"target_mot_z", msgpack::object(target_mot_z_, zone)},
+          move_x_first = target_mot_x_ < current_feedback_.stepper_positions[0];
+          if (move_x_first) {
+            data = {
+                {"command", msgpack::object("MOVE", zone)},
+                {"target_mot_x", msgpack::object(target_mot_x_, zone)},
 
-          };
+            };
+          } else {
+            data = {
+                {"command", msgpack::object("MOVE", zone)},
+                {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
+                {"target_mot_z", msgpack::object(target_mot_z_, zone)},
+
+            };
+          }
         }
         RCLCPP_INFO(
             get_logger(), "[uuid %s] Starting action %s",
             rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
             "MOVE");
+        GigatinoResult outcome = send_udp_message(data);
+        if (outcome != GigatinoResult::SUCCESS) {
+          handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
+              goal_handle, outcome);
+        } else {
+          {
+            std::scoped_lock lk(feedback_mtx_);
+            if (move_x_first) {
+              data = {
+                  {"command", msgpack::object("MOVE", zone)},
+                  {"target_mot_yaw", msgpack::object(target_mot_yaw_, zone)},
+                  {"target_mot_z", msgpack::object(target_mot_z_, zone)},
 
-        handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
-            goal_handle, send_udp_message(data));
+              };
+            } else {
+              data = {
+                  {"command", msgpack::object("MOVE", zone)},
+                  {"target_mot_x", msgpack::object(target_mot_x_, zone)},
+
+              };
+            }
+          }
+          handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
+              goal_handle, send_udp_message(data));
+        }
       },
       server_options, cb_group_);
 
