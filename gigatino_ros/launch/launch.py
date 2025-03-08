@@ -13,10 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import sys
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.actions import GroupAction
+from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
@@ -26,18 +30,112 @@ from launch_ros.descriptions import ComposableNode
 from rclpy.logging import get_logger
 
 
+def find_file(path, locations):
+    """
+    Check if the file at the given path exists. If not,
+    check if the path is absolute. If it is not absolute,
+    search for the file in the list of locations.
+
+    Args:
+        path (str): The path to the file.
+        locations (list): List of locations to search for the file.
+
+    Returns:
+        str: The absolute path to the file if found, otherwise None.
+    """
+    # Check if the file exists
+    if os.path.exists(path):
+        return path
+
+    # Check if the path is absolute
+    if os.path.isabs(path):
+        return None
+
+    # Search for the file in the list of locations
+    for location in locations:
+        file_path = os.path.join(location, path)
+        if os.path.exists(file_path):
+            return file_path
+
+    # File not found
+    return None
+
+
 def launch_with_context(context, *args, **kwargs):
     gigatino_dir = get_package_share_directory("gigatino_ros")
 
+    logger = get_logger("gigatino_ros_launch")
     LaunchConfiguration("namespace")
-    config = LaunchConfiguration("config")
+    config = LaunchConfiguration("gigatino_config")
     log_level = LaunchConfiguration("log_level")
+    tf_config = LaunchConfiguration("tf_config")
+    host_config = LaunchConfiguration("host_config")
     mockup = LaunchConfiguration("mockup").perform(context)
-    config_file = os.path.join(gigatino_dir, "params", config.perform(context))
-    # re-issue warning as it is not colored otherwise ...
-    if not os.path.isfile(config_file):
-        logger = get_logger("cx_bringup_launch")
-        logger.warning(f"Parameter file path is not a file: {config_file}")
+    config_file = find_file(config.perform(context), [gigatino_dir + "/params/"])
+    if config_file is None:
+        logger.error(f"Can not find unknown gigatino config file: {config_file}, abvort")
+        sys.exit(1)
+    tf_config_file = find_file(tf_config.perform(context), [gigatino_dir + "/params/"])
+    if tf_config_file is None:
+        logger.warning(f"Skipping unknown tf config file: {tf_config_file}")
+    host_config_file = find_file(host_config.perform(context), [gigatino_dir + "/params/"])
+    if host_config_file is None:
+        logger.warning(f"Skipping unknown host config file: {host_config_file}")
+    static_transform_publishers = []
+    static_transforms = {}
+    with open(tf_config_file, "r") as file:
+        transforms = yaml.safe_load(file)
+        for key in "/**|ros__parameters|static_transforms".split("|"):
+            transforms = transforms.get(key, {})
+        for entity, transform in transforms.items():
+            if not isinstance(static_transforms.get(entity), dict):
+                static_transforms[entity] = {}
+            for key in ["translation", "rotation", "parent_frame_id", "child_frame_id"]:
+                if key in transform:
+                    static_transforms[entity][key] = transform[key]
+    with open(host_config_file, "r") as file:
+        transforms = yaml.safe_load(file)
+        for key in "/**|ros__parameters|static_transforms".split("|"):
+            transforms = transforms.get(key, {})
+        for entity, transform in transforms.items():
+            if not isinstance(static_transforms.get(entity), dict):
+                static_transforms[entity] = {}
+            for key in ["translation", "rotation", "parent_frame_id", "child_frame_id"]:
+                if key in transform:
+                    static_transforms[entity][key] = transform[key]
+    for transform, values in static_transforms.items():
+        translation = values.get("translation", None)
+        rotation = values.get("rotation", None)
+        frame_id = values.get("parent_frame_id", None)
+        child_frame_id = values.get("child_frame_id", None)
+
+        if None in [translation, rotation, frame_id, child_frame_id]:
+            static_transform_publishers.append(LogInfo(msg="[WARN] Missing key(s) in transform. Skipping..."))
+            continue
+        static_transform_publisher_node = Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            output="screen",
+            arguments=[
+                "--x",
+                str(translation[0]),
+                "--y",
+                str(translation[1]),
+                "--z",
+                str(translation[2]),
+                "--yaw",
+                str(rotation[0]),
+                "--pitch",
+                str(rotation[1]),
+                "--roll",
+                str(rotation[2]),
+                "--frame-id",
+                frame_id,
+                "--child-frame-id",
+                child_frame_id,
+            ],
+        )
+        static_transform_publishers.append(static_transform_publisher_node)
     # container = ComposableNodeContainer(
     container = ComposableNodeContainer(
         name="gigatino_container",
@@ -49,7 +147,7 @@ def launch_with_context(context, *args, **kwargs):
     )
     mockup_args = {}
     mockup_script = []
-    if mockup:
+    if mockup == "true":
         mockup_script = [
             Node(
                 package="gigatino_ros",
@@ -77,9 +175,15 @@ def launch_with_context(context, *args, **kwargs):
                 name="gigatino_ros",
                 parameters=[config_file, mockup_args],
             ),
+            # ComposableNode(
+            #    package="tf2_ros",
+            #    plugin="tf2_ros::StaticTransformBroadcasterNode",
+            #    name="gigatino_transform",
+            #    parameters=[{"translation.x": 10}],
+            # ),
         ],
     )
-    return [container, load_composable_nodes] + mockup_script
+    return [container, load_composable_nodes] + mockup_script + [GroupAction(actions=static_transform_publishers)]
 
 
 def generate_launch_description():
@@ -93,12 +197,22 @@ def generate_launch_description():
 
     declare_namespace_ = DeclareLaunchArgument("namespace", default_value="", description="Default namespace")
 
-    declare_add_mockup_ = DeclareLaunchArgument("mockup", default_value="True", description="Default namespace")
+    declare_add_mockup_ = DeclareLaunchArgument("mockup", default_value="true", description="Default namespace")
 
     declare_gigatino_ros_config_ = DeclareLaunchArgument(
-        "config",
+        "gigatino_config",
         default_value="config.yaml",
         description="Name of the node configuration file",
+    )
+    declare_tf_config_ = DeclareLaunchArgument(
+        "tf_config",
+        default_value="gripper_tfs.yaml",
+        description="Name of the gripper tf file",
+    )
+    declare_host_config_ = DeclareLaunchArgument(
+        "host_config",
+        default_value="gripper_tfs.yaml",
+        description="Name of the gripper tf file",
     )
 
     ld.add_action(declare_log_level_)
@@ -106,5 +220,7 @@ def generate_launch_description():
     ld.add_action(declare_namespace_)
     ld.add_action(declare_gigatino_ros_config_)
     ld.add_action(declare_add_mockup_)
+    ld.add_action(declare_tf_config_)
+    ld.add_action(declare_host_config_)
     ld.add_action(OpaqueFunction(function=launch_with_context))
     return ld
