@@ -147,7 +147,9 @@ void read_command(void) {
 inline void calibrate(void) {
   bool calibrate_busy = false;
   for (size_t i = 0; i < stepper_setup.size(); i++) {
-    calibrate_busy = calibrate_busy | !current_feedback.stepper_endstops[i];
+    if (current_command.stepper_mask & (1 << i)) {
+      calibrate_busy = calibrate_busy | !current_feedback.stepper_endstops[i];
+    }
   }
   if (!calibrate_busy) {
     current_feedback.busy = false;
@@ -165,8 +167,10 @@ inline void calibrate(void) {
     new_command_received = false;
 
     for (size_t i = 0; i < stepper_setup.size(); i++) {
-      if (!current_feedback.stepper_endstops[i]) {
-        stepper_setup[i]->reference();
+      if (current_command.stepper_mask & (1 << i)) {
+        if (!current_feedback.stepper_endstops[i]) {
+          stepper_setup[i]->reference();
+        }
       }
     }
   }
@@ -289,8 +293,10 @@ void execute_command(void) {
 #ifdef SERIAL_OUTPUT
       Serial.println("Stop");
 #endif
-      for (const auto &mot : stepper_setup) {
-        mot->set_speed(0);
+      for (size_t i = 0; i < stepper_setup.size(); i++) {
+        if (current_command.stepper_mask & (1 << i)) {
+          stepper_setup[i]->set_speed(0);
+        }
       }
       current_feedback.busy = false;
       new_command_received = false;

@@ -114,7 +114,7 @@ def listen_for_messages():
         if curr_command["command"] == "MOVE":
             target_pos_stepper = {k: v for k, v in curr_command.items() if k.startswith("target_mot_")}
         if curr_command["command"] == "CALIBRATE":
-            target_pos_stepper = {"target_mot_x": 0.0, "target_mot_yaw": 0.0, "target_mot_z": 0.0, "target_mot_u": 0.0}
+            target_pos_stepper = {k: 0.0 for k, v in curr_command.items() if k.startswith("target_mot_")}
         if curr_command["command"] == "HOME":
             target_pos_stepper = home_pos
         if curr_command["command"] == "STOP":
