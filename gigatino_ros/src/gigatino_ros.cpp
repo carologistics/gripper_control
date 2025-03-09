@@ -90,7 +90,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 
   home_action_server_ = setup_server<Home, Home::Goal>(
       "gigatino/home",
-      [this](msgpack::zone &zone, std::shared_ptr<const Home::Goal> g)
+      [this](msgpack::zone &zone,
+             std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> g)
           -> std::map<std::string, msgpack::object> {
         (void)g;
         return {
@@ -101,12 +102,23 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 
   calibrate_action_server_ = setup_server<Calibrate, Calibrate::Goal>(
       "gigatino/calibrate",
-      [this](msgpack::zone &zone, std::shared_ptr<const Calibrate::Goal> g)
+      [this](msgpack::zone &zone,
+             std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>> g_h)
           -> std::map<std::string, msgpack::object> {
-        (void)g;
-        return {
+        std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("CALIBRATE", zone)},
+            {"target_mot_x", msgpack::object(0.0f, zone)},
         };
+        GigatinoResult res = send_udp_message(data);
+        if (res != GigatinoResult::SUCCESS) {
+          handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
+                        Calibrate::Result>(g_h, res);
+          return {};
+        } else {
+          return {
+              {"command", msgpack::object("CALIBRATE", zone)},
+          };
+        }
       },
       server_options, cb_group_);
 
@@ -242,10 +254,11 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 
   gripper_action_server_ = setup_server<Gripper, Gripper::Goal>(
       "gigatino/gripper",
-      [this](msgpack::zone &zone, std::shared_ptr<const Gripper::Goal> g)
+      [this](msgpack::zone &zone,
+             std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> g_h)
           -> std::map<std::string, msgpack::object> {
         float target_servo_pos = gripper_close_pos_;
-        if (g->open) {
+        if (g_h->get_goal()->open) {
           target_servo_pos = gripper_open_pos_;
         }
         return {
@@ -257,9 +270,10 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 
   stop_action_server_ = setup_server<Stop, Stop::Goal>(
       "gigatino/stop",
-      [this](msgpack::zone &zone, std::shared_ptr<const Stop::Goal> g)
+      [this](msgpack::zone &zone,
+             std::shared_ptr<rclcpp_action::ServerGoalHandle<Stop>> g_h)
           -> std::map<std::string, msgpack::object> {
-        (void)g;
+        (void)g_h;
         return {{"command", msgpack::object("STOP", zone)}};
       },
       server_options, cb_group_);

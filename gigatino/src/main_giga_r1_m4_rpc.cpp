@@ -87,6 +87,31 @@ size_t serialize_feedback() {
   return serializeMsgPack(doc, serialized_out, 128);
 }
 
+inline void fill_stepper_mask(JsonDocument &doc) {
+  current_command.stepper_mask = 0;
+  int counter = 0;
+  for (auto &val :
+       {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
+    if (doc[val].is<float>()) {
+      current_command.stepper_mask |= 1 << counter;
+      current_command.stepper_positions[counter] = doc[val];
+    }
+    counter++;
+  }
+}
+
+inline void fill_servo_mask(JsonDocument &doc) {
+  current_command.servo_mask = 0;
+  int counter = 0;
+  for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
+    if (doc[val].is<float>()) {
+      current_command.servo_mask |= 1 << counter;
+      current_command.servo_positions[counter] = doc[val];
+    }
+    counter++;
+  }
+}
+
 bool load_command_from_json(JsonDocument &doc) {
 #ifdef DEBUG_VIA_RPC
   RPC.println("Load json");
@@ -103,29 +128,22 @@ bool load_command_from_json(JsonDocument &doc) {
   }
   if (doc["command"] == "MOVE") {
     current_command.command_id = CommandID::MOVE;
-    current_command.stepper_mask = 0;
-    current_command.servo_mask = 0;
-    int counter = 0;
-    for (auto &val :
-         {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
-      if (doc[val].is<float>()) {
-        current_command.stepper_mask |= 1 << counter;
-        current_command.stepper_positions[counter] = doc[val];
-      }
-      counter++;
-    }
-    counter = 0;
-    for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
-      if (doc[val].is<float>()) {
-        current_command.servo_mask |= 1 << counter;
-        current_command.servo_positions[counter] = doc[val];
-      }
-      counter++;
-    }
+    fill_stepper_mask(doc);
+    fill_servo_mask(doc);
   } else if (doc["command"] == "CALIBRATE") {
     current_command.command_id = CommandID::CALIBRATE;
+    fill_stepper_mask(doc);
+    // default to calibrating everything
+    if (current_command.stepper_mask == 0) {
+      current_command.stepper_mask = 0b1111;
+    }
   } else if (doc["command"] == "STOP") {
     current_command.command_id = CommandID::STOP;
+    fill_stepper_mask(doc);
+    // default to calibrating everything
+    if (current_command.stepper_mask == 0) {
+      current_command.stepper_mask = 0b1111;
+    }
   } else if (doc["command"] == "PID_UPDATE") {
     current_command.command_id = CommandID::PID_UPDATE;
     if (!doc["motor"].is<const char *>()) {
@@ -185,25 +203,8 @@ bool load_command_from_json(JsonDocument &doc) {
     }
   } else if (doc["command"] == "CONST_SPEED") {
     current_command.command_id = CommandID::CONST_SPEED;
-    current_command.stepper_mask = 0;
-    current_command.servo_mask = 0;
-    int counter = 0;
-    for (auto &val :
-         {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
-      if (doc[val].is<float>()) {
-        current_command.stepper_mask |= 1 << counter;
-        current_command.stepper_positions[counter] = doc[val];
-      }
-      counter++;
-    }
-    counter = 0;
-    for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
-      if (doc[val].is<float>()) {
-        current_command.servo_mask |= 1 << counter;
-        current_command.servo_positions[counter] = doc[val];
-      }
-      counter++;
-    }
+    fill_stepper_mask(doc);
+    fill_servo_mask(doc);
   } else {
 #ifdef DEBUG_VIA_RPC
     RPC.println("Load json failed, unknown command");
