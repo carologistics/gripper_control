@@ -95,7 +95,10 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           -> std::map<std::string, msgpack::object> {
         (void)g;
         return {
-            {"command", msgpack::object("HOME", zone)},
+            {"command", msgpack::object("MOVE", zone)},
+            {"target_mot_x", msgpack::object(0.0f, zone)},
+            {"target_mot_yaw", msgpack::object(51.0f, zone)},
+            {"target_mot_z", msgpack::object(0.0f, zone)},
         };
       },
       server_options, cb_group_);
