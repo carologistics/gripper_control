@@ -1,7 +1,7 @@
 gigatino_ros:
   ros__parameters:
-    local_ip_address: "192.168.1.2"
-    remote_ip_address: "192.168.1.100"
+    local_ip_address: "192.168.1.112"
+    remote_ip_address: "192.168.1.111"
     send_port: 8888
     recv_port: 8889
     command_timeout_ms: 15000
