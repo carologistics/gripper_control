@@ -86,7 +86,7 @@
 
 // precision threshold (in steps)
 #define MOT_X_PRECISION_THRESHOLD 0.5   // mm
-#define MOT_YAW_PRECISION_THRESHOLD 1.0 // 0.02 degree
+#define MOT_YAW_PRECISION_THRESHOLD 0.2 // 0.02 degree
 #define MOT_Z_PRECISION_THRESHOLD 0.5   // mm
 #define MOT_U_PRECISION_THRESHOLD 0.5   // mm
 
