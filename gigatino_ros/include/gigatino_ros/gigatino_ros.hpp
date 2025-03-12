@@ -97,8 +97,8 @@ private:
   // for protecting everything below
   std::mutex feedback_mtx_;
   Feedback current_feedback_;
-  bool action_running_;
-  bool cancel_action_ = true;
+  bool action_running_ = false;
+  bool cancel_action_ = false;
   int curr_command_index_;
   std::condition_variable action_cv_;
   // end protection of feedback_mtx_

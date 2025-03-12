@@ -105,7 +105,9 @@ def listen_for_messages():
             continue
         with variable_lock:
             curr_command = unpacked_data
-            curr_feedback["command_index"] = unpacked_data["command_index"]
+            print(unpacked_data, flush=True)
+            if "command_index" in unpacked_data:
+                curr_feedback["command_index"] = unpacked_data["command_index"]
         # Cancel the previous delay (if any) before starting a new one
         cancel_event.set()
         cancel_event.clear()
