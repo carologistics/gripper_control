@@ -179,9 +179,15 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
           target_mot_x_ = x_abs * 1000;
           target_mot_yaw_ = target_mot_y;
           target_mot_z_ = z_abs * 1000;
-          if ((min_x_ < target_mot_x_ && target_mot_x_ < max_x_) &&
-              (min_z_ < target_mot_z_ && target_mot_z_ < max_z_) &&
-              (min_yaw_ < target_mot_yaw_ && target_mot_yaw_ < max_yaw_)) {
+          if ((min_x_ < target_mot_x_ + 0.5f &&
+               target_mot_x_ - 0.5f < max_x_) &&
+              (min_z_ < target_mot_z_ + 0.5f &&
+               target_mot_z_ - 0.5f < max_z_) &&
+              (min_yaw_ < target_mot_yaw_ + 0.2f &&
+               target_mot_yaw_ - 0.2f < max_yaw_)) {
+            target_mot_x_ = std::clamp(target_mot_x_, min_x_, max_x_);
+            target_mot_yaw_ = std::clamp(target_mot_yaw_, min_yaw_, max_yaw_);
+            target_mot_z_ = std::clamp(target_mot_z_, min_z_, max_z_);
             RCLCPP_INFO(get_logger(), "x.abs : %.6f", target_mot_x_);
             RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", target_mot_yaw_);
             RCLCPP_INFO(get_logger(), "z_abs : %.6f", target_mot_z_);
