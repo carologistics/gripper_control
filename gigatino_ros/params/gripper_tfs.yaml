@@ -11,7 +11,7 @@
         child_frame_id: gripper_yaw_origin
         parent_frame_id: gripper_z_dyn
         translation: [0.0325, 0.0, 0.405]
-        rotation: [0.0, 0.0, 0.0]
+        rotation: [0.910, 0.0, 0.0]
       gripper_x_origin:
         child_frame_id: gripper_x_origin
         parent_frame_id: gripper_yaw_dyn
@@ -24,9 +24,9 @@
         rotation: [0.0, 0.0, 0.0]
       gripper_home_origin:
         child_frame_id: gripper_home_origin
-        parent_frame_id: gripper_z_origin
-        translation: [0.033, 0.0, 0.46808]
-        rotation: [0.0, 0.0, 0.0]
+        parent_frame_id: base_link
+        translation: [0.0975, -0.060, 0.875]
+        rotation: [0.910, 0.0, 0.0]
       gripper_cam:
         child_frame_id: gripper_cam
         parent_frame_id: gripper_yaw_dyn
@@ -36,4 +36,4 @@
         child_frame_id: end_effector_home
         parent_frame_id: base_link
         translation: [0.109, 0.019, 0.875]
-        rotation: [0.0, 0.0, 0.910]
+        rotation: [0.0, 0.0, 0.0]
