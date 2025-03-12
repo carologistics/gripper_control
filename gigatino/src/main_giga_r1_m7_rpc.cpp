@@ -134,7 +134,10 @@ void gather_feedback(void) {
   }
 }
 
-void send_feedback(void) { put_to_m4(&current_feedback, sizeof(Feedback)); }
+void send_feedback(void) {
+  current_feedback.command_index = current_command.command_index;
+  put_to_m4(&current_feedback, sizeof(Feedback));
+}
 
 void read_command(void) {
   m4_data_read = get_from_m4(&current_command, sizeof(Command));
