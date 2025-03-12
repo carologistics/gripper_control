@@ -2,38 +2,42 @@
 /**:
   ros__parameters:
     static_transforms:
+      # y and z is the middle of the axis plate, x is the end of it (not mounting plate)
       gripper_z_origin:
         child_frame_id: gripper_z_origin
         parent_frame_id: base_link
-        translation: [0.065, -0.060, 0.40692]
+        translation: [0.065, -0.060, 0.53]
         rotation: [0.0, 0.0, 0.0]
+      # x and y is middle off three mounting screws, z is top of plate
       gripper_yaw_origin:
         child_frame_id: gripper_yaw_origin
         parent_frame_id: gripper_z_dyn
-        translation: [0.0325, 0.0, 0.405]
+        translation: [0.035, 0.0, 0.335]
         rotation: [0.910, 0.0, 0.0]
+      # x is end of carrier closer to gripper, y is middle of gripper, z is middle of the 4 screws
       gripper_x_origin:
         child_frame_id: gripper_x_origin
         parent_frame_id: gripper_yaw_dyn
-        translation: [0.04025, 0.03955, 0.0905]
+        translation: [0.04025, 0.03955, 0.03]
         rotation: [0.0, 0.0, 0.0]
+      # where the middle of a workpiece base would be
       gripper_end_effector:
         child_frame_id: gripper_end_effector
         parent_frame_id: gripper_x_dyn
-        translation: [0.029621, -0.0002, -0.027]
+        translation: [0.0475, -0.0002, -0.04]
         rotation: [0.0, 0.0, 0.0]
       gripper_home_origin:
         child_frame_id: gripper_home_origin
         parent_frame_id: base_link
-        translation: [0.0975, -0.060, 0.875]
+        translation: [0.1, -0.060, 0.8547]
         rotation: [0.910, 0.0, 0.0]
       gripper_cam:
         child_frame_id: gripper_cam
         parent_frame_id: gripper_yaw_dyn
-        translation: [0.0251, 0.060, 0.0875]
+        translation: [0.0251, 0.060, 0.025]
         rotation: [0.0, 0.0, 0.0]
       end_effector_home:
         child_frame_id: end_effector_home
         parent_frame_id: base_link
-        translation: [0.109, 0.019, 0.875]
+        translation: [0.1871, -0.0198, 0.8547]
         rotation: [0.0, 0.0, 0.0]

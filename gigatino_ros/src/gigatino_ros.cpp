@@ -181,7 +181,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         } else {
           tetha = (M_PI - beta - alpha) * -1;
         }
-        float target_mot_y = tetha * 180 / M_PI;
+        float target_mot_y = -tetha * 180 / M_PI;
         {
           std::scoped_lock lk(feedback_mtx_);
           target_mot_x_ = x_abs * 1000;
@@ -403,7 +403,7 @@ void GigatinoROS::start_receive() {
             transf_z.child_frame_id = tf_prefix_ + "gripper_z_dyn";
             tf2::Quaternion q;
             q.setRPY(0, 0,
-                     current_feedback_.stepper_positions[1] / 180.f *
+                     -current_feedback_.stepper_positions[1] / 180.f *
                          M_PI); // 0=x,1=yaw,2=z
             transf_yaw.transform.rotation.x = q.x();
             transf_yaw.transform.rotation.y = q.y();
