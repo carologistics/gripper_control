@@ -34,7 +34,7 @@
 #include <EthernetUdp3.h>
 
 #undef UDP_TX_PACKET_MAX_SIZE
-#define UDP_TX_PACKET_MAX_SIZE 128
+#define UDP_TX_PACKET_MAX_SIZE 512
 
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 IPAddress ip(192, 168, 0, 111);
@@ -46,7 +46,7 @@ unsigned int remote_port = 8889;
 // buffers for receiving and sending data
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE]; // buffer to hold incoming packet,
 
-char serialized_out[128];
+char serialized_out[512];
 
 Command current_command;
 bool new_command_received = false;
@@ -84,7 +84,7 @@ size_t serialize_feedback() {
   doc["command_index"] = current_feedback.command_index;
 
   // Serialize to MessagePack and send to output stream
-  return serializeMsgPack(doc, serialized_out, 128);
+  return serializeMsgPack(doc, serialized_out, 512);
 }
 
 inline void fill_stepper_mask(JsonDocument &doc) {
