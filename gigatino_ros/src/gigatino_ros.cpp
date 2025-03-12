@@ -97,7 +97,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         return {
             {"command", msgpack::object("MOVE", zone)},
             {"target_mot_x", msgpack::object(0.0f, zone)},
-            {"target_mot_yaw", msgpack::object(51.0f, zone)},
+            {"target_mot_yaw", msgpack::object(52.0f, zone)},
             {"target_mot_z", msgpack::object(0.0f, zone)},
         };
       },
