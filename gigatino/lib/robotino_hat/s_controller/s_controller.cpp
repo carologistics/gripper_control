@@ -33,14 +33,6 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
   float t_1 = peak_accel_ / max_jerk_;
   float d_1 = max_jerk_ / 6.0f * std::pow(t_1, 3);
   float v_1 = max_jerk_ / 2.0f * std::pow(t_1, 2);
-  Serial.print("dist: ");
-  Serial.print(dist);
-  Serial.print(" t_1: ");
-  Serial.print(t_1);
-  Serial.print(" d_1: ");
-  Serial.print(d_1);
-  Serial.print(" v_1: ");
-  Serial.println(v_1);
   float d_decel = v_1 * t_1 + max_jerk_ * std::pow(t_1, 3) / 6.0f;
 
   // Check if we will not reach max acceleration at all
@@ -98,6 +90,20 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
   dist_phase_7_ = dist - d_1;
   dist_phase_6_ = dist - d_2;
   dist_phase_5_ = dist - d_3;
+  Serial.print(" p1: ");
+  Serial.print(dist_phase_1_);
+  Serial.print(" p2: ");
+  Serial.print(dist_phase_2_);
+  Serial.print(" p3: ");
+  Serial.print(dist_phase_3_);
+  Serial.print(" p4: ");
+  Serial.print(dist_phase_4_);
+  Serial.print(" p5: ");
+  Serial.print(dist_phase_5_);
+  Serial.print(" p6: ");
+  Serial.print(dist_phase_6_);
+  Serial.print(" p7: ");
+  Serial.println(dist_phase_7_);
 }
 
 float SCurveMotionController::compute(float target, float current, float dt) {
