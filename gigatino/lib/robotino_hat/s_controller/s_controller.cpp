@@ -108,9 +108,16 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
 
 float SCurveMotionController::compute(float target, float current, float dt) {
   float distance_traveled = abs(start_pos_ - current);
-  if ((forward_ && (target - current) < 0.05) ||
-      (!forward_ && (current - target) < 0.005)) {
+  float dist_remaining = forward_ ? target - current : current - target;
+  if (abs(dist_remaining) < threshold_) {
     speed_ = 0;
+    accel_ = 0;
+    curr_phase_ = 8;
+    return speed_;
+  }
+  if (dist_remaining < 0) {
+    forward_ = !forward_;
+    speed_ = forward_ ? min_speed_ : -min_speed_;
     accel_ = 0;
     curr_phase_ = 8;
     return speed_;
