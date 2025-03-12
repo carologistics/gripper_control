@@ -555,13 +555,13 @@ void loop() {
 
 #ifdef SERIAL_OUTPUT
   static unsigned long last_called = millis();
-  if (last_called + 100 < millis()) {
+  if (last_called + 1000 < millis()) {
 
     last_called = millis();
     if (new_command_received) {
       Serial.println("new command received");
     }
-    for (size_t i = 0; i < 1; i++) {
+    for (size_t i = 0; i < 3; i++) {
       Serial.print("mot ");
       Serial.print(i);
       Serial.print(" enc: ");
