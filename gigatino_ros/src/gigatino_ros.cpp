@@ -32,6 +32,7 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   // declare_parameter("remote_ip_address", "192.168.1.100");
   declare_parameter("local_ip_address", "127.0.0.1");
   declare_parameter("remote_ip_address", "127.0.0.1");
+  declare_parameter("namespace", "");
   declare_parameter("send_port", 8888);
   declare_parameter("recv_port", 8889);
   declare_parameter("command_timeout_ms", 15000);
@@ -50,6 +51,8 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
 CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   RCLCPP_DEBUG(get_logger(), "on_configure() is called.");
   createBond();
+  namespace_ = get_parameter("namespace").as_string();
+  tf_prefix_ = get_parameter("tf_prefix").as_string();
   command_timeout_ =
       std::chrono::milliseconds(get_parameter("command_timeout_ms").as_int());
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
@@ -85,11 +88,11 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   // server_options.result_service_qos = qos_profile;
 
   feedback_pub_ = rclcpp::create_publisher<Feedback>(
-      this, "gigatino/feedback",
+      this, namespace_ + "/gigatino/feedback",
       rclcpp::QoS(1).best_effort().durability_volatile());
 
   home_action_server_ = setup_server<Home, Home::Goal>(
-      "gigatino/home",
+      namespace_ + "/gigatino/home",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> g)
           -> std::map<std::string, msgpack::object> {
@@ -104,7 +107,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   calibrate_action_server_ = setup_server<Calibrate, Calibrate::Goal>(
-      "gigatino/calibrate",
+      namespace_ + "/gigatino/calibrate",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>> g_h)
           -> std::map<std::string, msgpack::object> {
@@ -126,7 +129,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   move_action_server_ = rclcpp_action::create_server<Move>(
-      this, "gigatino/move",
+      this, namespace_ + "gigatino/move",
       // Goal handler
       [this](
           const rclcpp_action::GoalUUID &,
@@ -140,23 +143,28 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         goal_pose.pose.position.z = g->z;
         goal_pose.header.stamp.sec = 0;
         goal_pose.header.stamp.nanosec = 0;
-        tf_buffer_->transform(goal_pose, target_point, "gripper_home_origin");
+        tf_buffer_->transform(goal_pose, target_point,
+                              tf_prefix_ + "gripper_home_origin");
         float z_abs = target_point.pose.position.z;
         geometry_msgs::msg::PoseStamped target_to_yaw;
-        tf_buffer_->transform(goal_pose, target_to_yaw, "gripper_yaw_origin");
+        tf_buffer_->transform(goal_pose, target_to_yaw,
+                              tf_prefix_ + "gripper_yaw_origin");
         geometry_msgs::msg::TransformStamped offset_end_effector =
-            tf_buffer_->lookupTransform("gripper_x_dyn", "gripper_end_effector",
+            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_dyn",
+                                        tf_prefix_ + "gripper_end_effector",
                                         tf2::TimePointZero);
         geometry_msgs::msg::TransformStamped end_effector_to_yaw =
-            tf_buffer_->lookupTransform(
-                "gripper_yaw_dyn", "gripper_end_effector", tf2::TimePointZero);
+            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_yaw_dyn",
+                                        tf_prefix_ + "gripper_end_effector",
+                                        tf2::TimePointZero);
         float d = end_effector_to_yaw.transform.translation.y;
         float T_distance =
             std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) +
                       std::pow(target_to_yaw.pose.position.y, 2));
         float beta = acos(abs(d) / abs(T_distance));
         geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =
-            tf_buffer_->lookupTransform("gripper_x_origin", "gripper_yaw_dyn",
+            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_origin",
+                                        tf_prefix_ + "gripper_yaw_dyn",
                                         tf2::TimePointZero);
         float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) +
                          abs(offset_end_effector.transform.translation.x);
@@ -262,7 +270,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   gripper_action_server_ = setup_server<Gripper, Gripper::Goal>(
-      "gigatino/gripper",
+      namespace_ + "/gigatino/gripper",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> g_h)
           -> std::map<std::string, msgpack::object> {
@@ -278,7 +286,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   stop_action_server_ = setup_server<Stop, Stop::Goal>(
-      "gigatino/stop",
+      namespace_ + "/gigatino/stop",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Stop>> g_h)
           -> std::map<std::string, msgpack::object> {
@@ -383,16 +391,16 @@ void GigatinoROS::start_receive() {
             // TODO: compute transform from abs positions
             geometry_msgs::msg::TransformStamped transf_yaw;
             transf_yaw.header.stamp = this->get_clock()->now();
-            transf_yaw.header.frame_id = "gripper_yaw_origin";
-            transf_yaw.child_frame_id = "gripper_yaw_dyn";
+            transf_yaw.header.frame_id = tf_prefix_ + "gripper_yaw_origin";
+            transf_yaw.child_frame_id = tf_prefix_ + "gripper_yaw_dyn";
             geometry_msgs::msg::TransformStamped transf_x;
             transf_x.header.stamp = this->get_clock()->now();
-            transf_x.header.frame_id = "gripper_x_origin";
-            transf_x.child_frame_id = "gripper_x_dyn";
+            transf_x.header.frame_id = tf_prefix_ + "gripper_x_origin";
+            transf_x.child_frame_id = tf_prefix_ + "gripper_x_dyn";
             geometry_msgs::msg::TransformStamped transf_z;
             transf_z.header.stamp = this->get_clock()->now();
-            transf_z.header.frame_id = "gripper_z_origin";
-            transf_z.child_frame_id = "gripper_z_dyn";
+            transf_z.header.frame_id = tf_prefix_ + "gripper_z_origin";
+            transf_z.child_frame_id = tf_prefix_ + "gripper_z_dyn";
             tf2::Quaternion q;
             q.setRPY(0, 0,
                      current_feedback_.stepper_positions[1] / 180.f *
