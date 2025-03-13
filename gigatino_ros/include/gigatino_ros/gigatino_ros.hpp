@@ -105,6 +105,9 @@ private:
 
   std::array<char, BUFFER_SIZE> recv_buffer_;
 
+  std::string namespace_;
+  std::string tf_prefix_;
+
   void start_receive();
 
   void cancel_action(bool stop = false);
