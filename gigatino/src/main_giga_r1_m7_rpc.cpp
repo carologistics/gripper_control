@@ -473,6 +473,10 @@ void execute_command(void) {
       break;
     }
     }
+  } else {
+    for (size_t i = 0; i < stepper_setup.size(); i++) {
+      stepper_setup[i]->set_speed(0);
+    }
   }
 }
 
