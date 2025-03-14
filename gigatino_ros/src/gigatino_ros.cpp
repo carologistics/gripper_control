@@ -32,7 +32,7 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   // declare_parameter("remote_ip_address", "192.168.1.100");
   declare_parameter("local_ip_address", "127.0.0.1");
   declare_parameter("remote_ip_address", "127.0.0.1");
-  declare_parameter("namespace", "");
+  declare_parameter("tf_prefix", "");
   declare_parameter("send_port", 8888);
   declare_parameter("recv_port", 8889);
   declare_parameter("command_timeout_ms", 15000);
@@ -51,7 +51,6 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
 CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   RCLCPP_DEBUG(get_logger(), "on_configure() is called.");
   createBond();
-  namespace_ = get_parameter("namespace").as_string();
   tf_prefix_ = get_parameter("tf_prefix").as_string();
   command_timeout_ =
       std::chrono::milliseconds(get_parameter("command_timeout_ms").as_int());
@@ -86,13 +85,12 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   // server_options.goal_service_qos = qos_profile;
   // server_options.cancel_service_qos = qos_profile;
   // server_options.result_service_qos = qos_profile;
-
   feedback_pub_ = rclcpp::create_publisher<Feedback>(
-      this, namespace_ + "/gigatino/feedback",
+      this, "gigatino/feedback",
       rclcpp::QoS(1).best_effort().durability_volatile());
 
   home_action_server_ = setup_server<Home, Home::Goal>(
-      namespace_ + "/gigatino/home",
+      "gigatino/home",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Home>> g)
           -> std::map<std::string, msgpack::object> {
@@ -107,7 +105,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   calibrate_action_server_ = setup_server<Calibrate, Calibrate::Goal>(
-      namespace_ + "/gigatino/calibrate",
+      "gigatino/calibrate",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Calibrate>> g_h)
           -> std::map<std::string, msgpack::object> {
@@ -129,78 +127,86 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   move_action_server_ = rclcpp_action::create_server<Move>(
-      this, namespace_ + "gigatino/move",
+      this, "gigatino/move",
       // Goal handler
       [this](
           const rclcpp_action::GoalUUID &,
           std::shared_ptr<const Move::Goal> g) -> rclcpp_action::GoalResponse {
-        geometry_msgs::msg::PoseStamped target_point;
-        geometry_msgs::msg::PoseStamped goal_pose =
-            geometry_msgs::msg::PoseStamped();
-        goal_pose.header.frame_id = g->target_frame;
-        goal_pose.pose.position.x = g->x; //-> for pointer
-        goal_pose.pose.position.y = g->y;
-        goal_pose.pose.position.z = g->z;
-        goal_pose.header.stamp.sec = 0;
-        goal_pose.header.stamp.nanosec = 0;
-        tf_buffer_->transform(goal_pose, target_point,
-                              tf_prefix_ + "gripper_home_origin");
-        float z_abs = target_point.pose.position.z;
-        geometry_msgs::msg::PoseStamped target_to_yaw;
-        tf_buffer_->transform(goal_pose, target_to_yaw,
-                              tf_prefix_ + "gripper_yaw_origin");
-        geometry_msgs::msg::TransformStamped offset_end_effector =
-            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_dyn",
-                                        tf_prefix_ + "gripper_end_effector",
-                                        tf2::TimePointZero);
-        geometry_msgs::msg::TransformStamped end_effector_to_yaw =
-            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_yaw_dyn",
-                                        tf_prefix_ + "gripper_end_effector",
-                                        tf2::TimePointZero);
-        float d = end_effector_to_yaw.transform.translation.y;
-        float T_distance =
-            std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) +
-                      std::pow(target_to_yaw.pose.position.y, 2));
-        float beta = acos(abs(d) / abs(T_distance));
-        geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =
-            tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_origin",
-                                        tf_prefix_ + "gripper_yaw_dyn",
-                                        tf2::TimePointZero);
-        float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) +
-                         abs(offset_end_effector.transform.translation.x);
-        float x_delta = T_distance * sin(beta);
-        float x_abs = x_delta - x_static;
-        float t_x = target_to_yaw.pose.position.x;
-        float t_y = target_to_yaw.pose.position.y;
-        float tetha;
-        float alpha = atan(abs(t_x) / abs(t_y));
-        if (t_y == 0) {
-          tetha = 0;
-        } else if (t_y >= 0) {
-          tetha = beta - alpha;
-        } else {
-          tetha = (M_PI - beta - alpha) * -1;
-        }
-        float target_mot_y = -tetha * 180 / M_PI;
-        {
-          std::scoped_lock lk(feedback_mtx_);
-          target_mot_x_ = x_abs * 1000;
-          target_mot_yaw_ = target_mot_y;
-          target_mot_z_ = z_abs * 1000;
-          if ((min_x_ < target_mot_x_ + 0.5f &&
-               target_mot_x_ - 0.5f < max_x_) &&
-              (min_z_ < target_mot_z_ + 0.5f &&
-               target_mot_z_ - 0.5f < max_z_) &&
-              (min_yaw_ < target_mot_yaw_ + 0.2f &&
-               target_mot_yaw_ - 0.2f < max_yaw_)) {
-            target_mot_x_ = std::clamp(target_mot_x_, min_x_, max_x_);
-            target_mot_yaw_ = std::clamp(target_mot_yaw_, min_yaw_, max_yaw_);
-            target_mot_z_ = std::clamp(target_mot_z_, min_z_, max_z_);
-            RCLCPP_INFO(get_logger(), "x.abs : %.6f", target_mot_x_);
-            RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", target_mot_yaw_);
-            RCLCPP_INFO(get_logger(), "z_abs : %.6f", target_mot_z_);
-            return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        try {
+          geometry_msgs::msg::PoseStamped target_point;
+          geometry_msgs::msg::PoseStamped goal_pose =
+              geometry_msgs::msg::PoseStamped();
+          goal_pose.header.frame_id = g->target_frame;
+          goal_pose.pose.position.x = g->x; //-> for pointer
+          goal_pose.pose.position.y = g->y;
+          goal_pose.pose.position.z = g->z;
+          goal_pose.header.stamp.sec = 0;
+          goal_pose.header.stamp.nanosec = 0;
+          tf_buffer_->transform(goal_pose, target_point,
+                                tf_prefix_ + "gripper_home_origin");
+          float z_abs = target_point.pose.position.z;
+          geometry_msgs::msg::PoseStamped target_to_yaw;
+          tf_buffer_->transform(goal_pose, target_to_yaw,
+                                tf_prefix_ + "gripper_yaw_origin");
+          geometry_msgs::msg::TransformStamped offset_end_effector =
+              tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_dyn",
+                                          tf_prefix_ + "gripper_end_effector",
+                                          tf2::TimePointZero);
+          geometry_msgs::msg::TransformStamped end_effector_to_yaw =
+              tf_buffer_->lookupTransform(tf_prefix_ + "gripper_yaw_dyn",
+                                          tf_prefix_ + "gripper_end_effector",
+                                          tf2::TimePointZero);
+          float d = end_effector_to_yaw.transform.translation.y;
+          float T_distance =
+              std::sqrt(std::pow(target_to_yaw.pose.position.x, 2) +
+                        std::pow(target_to_yaw.pose.position.y, 2));
+          float beta = acos(abs(d) / abs(T_distance));
+          geometry_msgs::msg::TransformStamped x_origin_to_yaw_dyn =
+              tf_buffer_->lookupTransform(tf_prefix_ + "gripper_x_origin",
+                                          tf_prefix_ + "gripper_yaw_dyn",
+                                          tf2::TimePointZero);
+          float x_static = abs(x_origin_to_yaw_dyn.transform.translation.x) +
+                           abs(offset_end_effector.transform.translation.x);
+          float x_delta = T_distance * sin(beta);
+          float x_abs = x_delta - x_static;
+          float t_x = target_to_yaw.pose.position.x;
+          float t_y = target_to_yaw.pose.position.y;
+          float tetha;
+          float alpha = atan(abs(t_x) / abs(t_y));
+          if (t_y == 0) {
+            tetha = 0;
+          } else if (t_y >= 0) {
+            tetha = beta - alpha;
+          } else {
+            tetha = (M_PI - beta - alpha) * -1;
           }
+          float target_mot_y = -tetha * 180 / M_PI;
+          {
+            std::scoped_lock lk(feedback_mtx_);
+            target_mot_x_ = x_abs * 1000;
+            target_mot_yaw_ = target_mot_y;
+            target_mot_z_ = z_abs * 1000;
+            if ((min_x_ < target_mot_x_ + 0.5f &&
+                 target_mot_x_ - 0.5f < max_x_) &&
+                (min_z_ < target_mot_z_ + 0.5f &&
+                 target_mot_z_ - 0.5f < max_z_) &&
+                (min_yaw_ < target_mot_yaw_ + 0.2f &&
+                 target_mot_yaw_ - 0.2f < max_yaw_)) {
+              target_mot_x_ = std::clamp(target_mot_x_, min_x_, max_x_);
+              target_mot_yaw_ = std::clamp(target_mot_yaw_, min_yaw_, max_yaw_);
+              target_mot_z_ = std::clamp(target_mot_z_, min_z_, max_z_);
+              RCLCPP_INFO(get_logger(), "x.abs : %.6f", target_mot_x_);
+              RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", target_mot_yaw_);
+              RCLCPP_INFO(get_logger(), "z_abs : %.6f", target_mot_z_);
+              return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+            }
+          }
+        } catch (tf2::LookupException &e) {
+          RCLCPP_ERROR(get_logger(), "Reject: %s", e.what());
+          return rclcpp_action::GoalResponse::REJECT;
+        } catch (tf2::InvalidArgumentException &e) {
+          RCLCPP_ERROR(get_logger(), "Reject: %s", e.what());
+          return rclcpp_action::GoalResponse::REJECT;
         }
         RCLCPP_ERROR(get_logger(), "x.abs : %.6f", target_mot_x_);
         RCLCPP_ERROR(get_logger(), "yaw_angle : %.6f", target_mot_yaw_);
@@ -270,7 +276,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   gripper_action_server_ = setup_server<Gripper, Gripper::Goal>(
-      namespace_ + "/gigatino/gripper",
+      "gigatino/gripper",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Gripper>> g_h)
           -> std::map<std::string, msgpack::object> {
@@ -286,7 +292,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       server_options, cb_group_);
 
   stop_action_server_ = setup_server<Stop, Stop::Goal>(
-      namespace_ + "/gigatino/stop",
+      "gigatino/stop",
       [this](msgpack::zone &zone,
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Stop>> g_h)
           -> std::map<std::string, msgpack::object> {
