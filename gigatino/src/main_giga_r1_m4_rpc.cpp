@@ -37,8 +37,8 @@
 #define UDP_TX_PACKET_MAX_SIZE 512
 
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress ip(192, 168, 0, 111);
-IPAddress remote_ip(192, 168, 0, 112); // where to send to
+IPAddress ip(192, 168, 3, 199);
+IPAddress remote_ip(192, 168, 3, 230); // where to send to
 EthernetUDP Udp;
 unsigned int localPort = 8888; // local port to listen on
 
