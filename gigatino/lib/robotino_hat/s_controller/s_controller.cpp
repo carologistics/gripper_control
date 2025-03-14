@@ -16,6 +16,7 @@
 #include <Arduino.h>
 
 void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
+  finished_ = false;
   Serial.print("Plan curve at start ");
   Serial.print(start_pos);
   Serial.print(" to target ");
@@ -107,12 +108,16 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
 }
 
 float SCurveMotionController::compute(float target, float current, float dt) {
+  if (finished_) {
+    return 0.f;
+  }
   float distance_traveled = abs(start_pos_ - current);
   float dist_remaining = forward_ ? target - current : current - target;
   if (abs(dist_remaining) < threshold_) {
     speed_ = 0;
     accel_ = 0;
     curr_phase_ = 8;
+    finished_ = true;
     return speed_;
   }
   if (dist_remaining < 0) {

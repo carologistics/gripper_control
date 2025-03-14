@@ -20,6 +20,7 @@ public:
   float start_pos_;
   int curr_phase_;
   bool forward_;
+  bool finished_;
 
 private:
   inline void accelerate_from_zero(float dt);
