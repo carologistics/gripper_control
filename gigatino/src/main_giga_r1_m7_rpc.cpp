@@ -124,7 +124,8 @@ void attach_interrupts() {
 
 void gather_feedback(void) {
   for (size_t i = 0; i < stepper_setup.size(); i++) {
-    if (i == 10) { // THIS CONDITION IS FOR IGNORING ENCODER
+    if (false) { // This can be used to ignore encoders, also requires disabling
+                 // of emergency stop
       current_feedback.stepper_positions[i] =
           stepper_setup[i]->steps_to_unit(stepper_setup[i]->curr_steps);
     } else {
