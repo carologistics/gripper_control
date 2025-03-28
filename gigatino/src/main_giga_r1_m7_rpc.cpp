@@ -124,8 +124,15 @@ void attach_interrupts() {
 
 void gather_feedback(void) {
   for (size_t i = 0; i < stepper_setup.size(); i++) {
-    current_feedback.stepper_positions[i] =
-        stepper_setup[i]->steps_to_unit(stepper_setup[i]->get_absolute_pos());
+    if (i == 10) { // THIS CONDITION IS FOR IGNORING ENCODER
+      current_feedback.stepper_positions[i] =
+          stepper_setup[i]->steps_to_unit(stepper_setup[i]->curr_steps);
+    } else {
+      current_feedback.stepper_positions[i] =
+          stepper_setup[i]->steps_to_unit(stepper_setup[i]->get_absolute_pos());
+    }
+    current_feedback.stepper_emergency_stops[i] =
+        stepper_setup[i]->emergency_stop;
     current_feedback.stepper_directions[i] = stepper_setup[i]->direction;
     current_feedback.stepper_endstops[i] =
         stepper_setup[i]->invert_endstop
@@ -144,6 +151,9 @@ void read_command(void) {
   if (m4_data_read > 0) {
     new_command_received = true;
     current_feedback.busy = true;
+    for (const auto &mot : stepper_setup) {
+      mot->emergency_stop = false;
+    }
   }
 }
 
@@ -232,7 +242,8 @@ inline bool stepper_move_const(float dt) {
     if (current_command.stepper_mask & (1 << i)) {
       if (abs(current_command.stepper_positions[i] -
               current_feedback.stepper_positions[i]) >
-          stepper_setup[i]->precision_threshold) {
+              stepper_setup[i]->precision_threshold &&
+          !stepper_setup[i]->emergency_stop) {
         target_reached = false;
       } else {
         stepper_setup[i]->set_speed(0);
@@ -258,7 +269,8 @@ inline bool stepper_move(float dt) {
     if (current_command.stepper_mask & (1 << i)) {
       if (abs(current_command.stepper_positions[i] -
               current_feedback.stepper_positions[i]) >
-          stepper_setup[i]->precision_threshold) {
+              stepper_setup[i]->precision_threshold &&
+          !stepper_setup[i]->emergency_stop) {
         target_reached = false;
       } else {
         stepper_setup[i]->set_speed(0);
@@ -283,6 +295,16 @@ inline bool stepper_move(float dt) {
 
 void execute_command(void) {
   if (current_feedback.busy) {
+    // check if encoder pos and counted steps are matching,
+    // if not block motor from moving until next command is issued
+    for (const auto &mot : stepper_setup) {
+      if (abs(mot->curr_steps - mot->get_absolute_pos()) >
+          mot->step_loss_threshold) {
+        mot->emergency_stop = true;
+        mot->set_speed(0.0);
+      }
+    }
+
     switch (current_command.command_id) {
     case CommandID::NO_COMMAND:
       current_feedback.busy = false;
@@ -537,6 +559,9 @@ void loop() {
   }
   loop_delta = millis() - last_loop;
   last_loop = millis();
+  for (const auto &mot : stepper_setup) {
+    mot->update_curr_steps(loop_delta / 1000.f);
+  }
 #ifdef DEBUG_VIA_RPC
   // step 0: write RPC buffer to serial
   String buffer = "";

@@ -132,4 +132,10 @@
 #define MOT_Z_REFERENCE_SPEED 50
 #define MOT_U_REFERENCE_SPEED 50
 
+// in steps (automatically considers microstep setting)
+#define MOT_X_STEP_LOSS_THRESHOLD 8.0
+#define MOT_YAW_STEP_LOSS_THRESHOLD 8.0
+#define MOT_Z_STEP_LOSS_THRESHOLD 8.0
+#define MOT_U_STEP_LOSS_THRESHOLD 8.0
+
 #endif // STEPPER_CONFIG_H_

@@ -77,6 +77,11 @@ size_t serialize_feedback() {
   for (int i = 0; i < 4; i++)
     stepper_endstops.add(current_feedback.stepper_endstops[i]);
 
+  JsonArray stepper_emergency_stops =
+      doc["stepper_emergency_stops"].to<JsonArray>();
+  for (int i = 0; i < 4; i++)
+    stepper_endstops.add(current_feedback.stepper_emergency_stops[i]);
+
   // Store native values
   doc["wp_sensor"] = current_feedback.wp_sensor;
   doc["busy"] = current_feedback.busy;
