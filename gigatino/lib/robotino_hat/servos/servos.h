@@ -4,6 +4,7 @@
 #define SERVOS_H_
 #include <timer_setup/timer_setup.h>
 
+namespace servos {
 struct ServoSetup {
   TimerPinSetup pwm;
   const float min_angle;
@@ -27,4 +28,6 @@ struct ServoSetup {
 
 extern ServoSetup servo_gripper;
 extern ServoSetup servo_rotation;
+} // namespace servos
+
 #endif // SERVOS_H_

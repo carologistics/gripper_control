@@ -105,6 +105,9 @@ private:
 
   std::array<char, BUFFER_SIZE> recv_buffer_;
 
+  std::string namespace_;
+  std::string tf_prefix_;
+
   void start_receive();
 
   void cancel_action(bool stop = false);
@@ -175,7 +178,8 @@ private:
   std::shared_ptr<rclcpp_action::Server<ActionT>>
   setup_server(const std::string &action_name,
                std::function<std::map<std::string, msgpack::object>(
-                   msgpack::zone &, std::shared_ptr<const GoalT>)>
+                   msgpack::zone &,
+                   std::shared_ptr<rclcpp_action::ServerGoalHandle<ActionT>>)>
                    goal_processor,
                const rcl_action_server_options_t &server_options,
                rclcpp::CallbackGroup::SharedPtr cb_group) {
@@ -198,8 +202,14 @@ private:
         [this, action_name,
          goal_processor](std::shared_ptr<GoalHandle> goal_handle) {
           msgpack::zone zone;
-          auto data = goal_processor(
-              zone, goal_handle->get_goal()); // Call user function
+          auto data = goal_processor(zone, goal_handle); // Call user function
+          if (data.size() == 0) {
+            RCLCPP_INFO(
+                get_logger(), "[uuid %s] No data given for %s",
+                rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                action_name.c_str());
+            return;
+          }
 
           RCLCPP_INFO(
               get_logger(), "[uuid %s] Starting action %s",

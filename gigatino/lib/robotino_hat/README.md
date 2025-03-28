@@ -81,6 +81,17 @@ Robotino HAT socket wiring:
 - pin 2: brown
 - pin 3: blue
 
+### Servos
+Servo Cable output:
+ - red: 5v
+ - yellow: signal
+ - brown: ground
+
+Robotino HAT socket wiring:
+ - pin 1: 5v (brown)
+ - pin 2: signal (black)
+ - pin 3: ground (blue)
+
 ## D7/D8
 Robotino HAT socket wiring:
 - pin 1: unused (is connected to 5v)
