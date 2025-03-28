@@ -16,6 +16,8 @@
 #include <config/servo_config.h>
 #include <servos/servos.h>
 
+namespace servos {
+
 void ServoSetup::init(void) {
   setup_pwm(pwm, pwm_prescaler);
   set_position(min_angle);
@@ -52,3 +54,4 @@ ServoSetup servo_rotation = {
     .pwm_prescaler = SERVO_ROTATION_PWM_PRESCALER,
     .pwm_target_freq = SERVO_ROTATION_PWM_TARGET_FREQ,
     .pwm_threshold = SERVO_ROTATION_MIN_ANGLE};
+} // namespace servos

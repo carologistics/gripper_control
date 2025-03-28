@@ -20,6 +20,8 @@
 #include <limits>
 #include <timer_setup/timer_setup.h>
 
+namespace stepper_motors {
+
 void StepperMotorSetup::init(void) {
   setup_pwm(pwm, pwm_prescaler);
   setup_encoder(encoder_a, encoder_b, 8 * encoder_rev_count,
@@ -130,7 +132,6 @@ float StepperMotorSetup::steps_to_unit(float steps) {
 float StepperMotorSetup::unit_to_steps(float unit) {
   return unit * gear_ratio / rot_per_step;
 }
-
 // Motor X is actually Encoder X and vice versa, so this makes no sense and
 // should be avoided for now
 StepperMotorSetup mot_x = {
@@ -286,3 +287,4 @@ StepperMotorSetup mot_u = {
     .motion_controller = {MOT_U_MOTION_MIN_SPEED, MOT_U_MOTION_MAX_SPEED,
                           MOT_U_MOTION_MAX_ACCEL, MOT_U_MOTION_MAX_JERK,
                           MOT_U_MOTION_SHORT_DIST, MOT_U_PRECISION_THRESHOLD}};
+} // namespace stepper_motors
