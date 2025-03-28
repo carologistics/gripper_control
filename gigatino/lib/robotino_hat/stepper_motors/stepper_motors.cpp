@@ -51,12 +51,13 @@ void StepperMotorSetup::update_curr_steps(float dt) {
 }
 
 void StepperMotorSetup::set_speed(float steps_per_sec) {
-  curr_steps_per_sec = steps_per_sec;
   if (steps_per_sec == 0 || emergency_stop) {
+    curr_steps_per_sec = 0;
     set_pwm(pwm, 0, 0);
     set_break(true);
     return;
   }
+  curr_steps_per_sec = steps_per_sec;
   set_break(false);
   float tick_speed = (pwm_freq / pwm_prescaler); // Mhz
   uint16_t tim_max = min(std::numeric_limits<uint16_t>::max() - 1,
