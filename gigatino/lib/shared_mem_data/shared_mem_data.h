@@ -63,6 +63,7 @@ typedef struct feedback {
   float stepper_positions[4];
   float servo_positions[2];
   bool stepper_directions[4];
+  bool stepper_emergency_stops[4];
   bool stepper_endstops[4];
   bool wp_sensor;
   bool busy;
