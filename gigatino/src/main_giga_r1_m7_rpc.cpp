@@ -43,82 +43,84 @@ unsigned long loop_delta = CONTROL_DT;
 // e.g., first motor in this list will be x, second yaw, third z, fourth u
 
 // mot_u is broken as TIM2 is used by us_ticker of mbed-os on M4
-const std::array<StepperMotorSetup *, 3> stepper_setup = {&mot_x, &mot_yaw,
-                                                          &mot_z};
-// const std::array<StepperMotorSetup*,1> stepper_setup = {&mot_x};
+const std::array<stepper_motors::StepperMotorSetup *, 3> stepper_setup = {
+    &stepper_motors::mot_x, &stepper_motors::mot_yaw, &stepper_motors::mot_z};
+// const std::array<StepperMotorSetup*,1> stepper_setup =
+// {&stepper_motors::mot_x};
 
 // servo_rotation is broken as TIM5 is used by us_ticker of mbed-os on M7
-const std::array<ServoSetup *, 1> servo_setup = {&servo_gripper};
+const std::array<servos::ServoSetup *, 1> servo_setup = {
+    &servos::servo_gripper};
 // const std::array<ServoSetup*,0> servo_setup = {};
 
 bool stepper_positions_reached = false;
 bool servo_positions_reached = false;
 
-void mot_x_enc_isr() { mot_x.update_abs_position(); }
-void mot_yaw_enc_isr() { mot_yaw.update_abs_position(); }
-void mot_z_enc_isr() { mot_z.update_abs_position(); }
+void mot_x_enc_isr() { stepper_motors::mot_x.update_abs_position(); }
+void mot_yaw_enc_isr() { stepper_motors::mot_yaw.update_abs_position(); }
+void mot_z_enc_isr() { stepper_motors::mot_z.update_abs_position(); }
 
-void mot_u_enc_isr() { mot_u.update_abs_position(); }
+void mot_u_enc_isr() { stepper_motors::mot_u.update_abs_position(); }
 
-void mot_x_endstop_isr() { mot_x.endstop_hit(); }
+void mot_x_endstop_isr() { stepper_motors::mot_x.endstop_hit(); }
 
-void mot_yaw_endstop_isr() { mot_yaw.endstop_hit(); }
+void mot_yaw_endstop_isr() { stepper_motors::mot_yaw.endstop_hit(); }
 
-void mot_z_endstop_isr() { mot_z.endstop_hit(); }
+void mot_z_endstop_isr() { stepper_motors::mot_z.endstop_hit(); }
 
-void mot_u_endstop_isr() { mot_u.endstop_hit(); }
+void mot_u_endstop_isr() { stepper_motors::mot_u.endstop_hit(); }
 
 void attach_interrupts() {
 
-  pinMode(mot_x.encoder_n_pin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(mot_x.encoder_n_pin), mot_x_enc_isr,
-                  RISING);
+  pinMode(stepper_motors::mot_x.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_x.encoder_n_pin),
+                  mot_x_enc_isr, RISING);
 
-  pinMode(mot_yaw.encoder_n_pin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(mot_yaw.encoder_n_pin), mot_yaw_enc_isr,
-                  RISING);
+  pinMode(stepper_motors::mot_yaw.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_yaw.encoder_n_pin),
+                  mot_yaw_enc_isr, RISING);
 
-  pinMode(mot_z.encoder_n_pin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(mot_z.encoder_n_pin), mot_z_enc_isr,
-                  RISING);
+  pinMode(stepper_motors::mot_z.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_z.encoder_n_pin),
+                  mot_z_enc_isr, RISING);
 
-  pinMode(mot_u.encoder_n_pin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(mot_u.encoder_n_pin), mot_u_enc_isr,
-                  RISING);
+  pinMode(stepper_motors::mot_u.encoder_n_pin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_u.encoder_n_pin),
+                  mot_u_enc_isr, RISING);
 
-  pinMode(mot_x.endstop_pin, INPUT);
-  if (mot_x.invert_endstop) {
-    attachInterrupt(digitalPinToInterrupt(mot_x.endstop_pin), mot_x_endstop_isr,
-                    FALLING);
+  pinMode(stepper_motors::mot_x.endstop_pin, INPUT);
+  if (stepper_motors::mot_x.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_x.endstop_pin),
+                    mot_x_endstop_isr, FALLING);
   } else {
-    attachInterrupt(digitalPinToInterrupt(mot_x.endstop_pin), mot_x_endstop_isr,
-                    RISING);
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_x.endstop_pin),
+                    mot_x_endstop_isr, RISING);
   }
 
-  pinMode(mot_yaw.endstop_pin, INPUT);
-  if (mot_yaw.invert_endstop) {
-    attachInterrupt(digitalPinToInterrupt(mot_yaw.endstop_pin),
+  pinMode(stepper_motors::mot_yaw.endstop_pin, INPUT);
+  if (stepper_motors::mot_yaw.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_yaw.endstop_pin),
                     mot_yaw_endstop_isr, FALLING);
   } else {
-    attachInterrupt(digitalPinToInterrupt(mot_yaw.endstop_pin),
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_yaw.endstop_pin),
                     mot_yaw_endstop_isr, RISING);
   }
-  pinMode(mot_z.endstop_pin, INPUT);
-  if (mot_z.invert_endstop) {
-    attachInterrupt(digitalPinToInterrupt(mot_z.endstop_pin), mot_z_endstop_isr,
-                    FALLING);
+  pinMode(stepper_motors::mot_z.endstop_pin, INPUT);
+  if (stepper_motors::mot_z.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_z.endstop_pin),
+                    mot_z_endstop_isr, FALLING);
   } else {
-    attachInterrupt(digitalPinToInterrupt(mot_z.endstop_pin), mot_z_endstop_isr,
-                    RISING);
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_z.endstop_pin),
+                    mot_z_endstop_isr, RISING);
   }
 
-  pinMode(mot_u.endstop_pin, INPUT);
-  if (mot_u.invert_endstop) {
-    attachInterrupt(digitalPinToInterrupt(mot_u.endstop_pin), mot_u_endstop_isr,
-                    FALLING);
+  pinMode(stepper_motors::mot_u.endstop_pin, INPUT);
+  if (stepper_motors::mot_u.invert_endstop) {
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_u.endstop_pin),
+                    mot_u_endstop_isr, FALLING);
   } else {
-    attachInterrupt(digitalPinToInterrupt(mot_u.endstop_pin), mot_u_endstop_isr,
-                    RISING);
+    attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_u.endstop_pin),
+                    mot_u_endstop_isr, RISING);
   }
 }
 
