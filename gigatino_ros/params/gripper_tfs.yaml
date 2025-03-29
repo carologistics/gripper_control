@@ -34,7 +34,7 @@
       gripper_cam:
         child_frame_id: gripper_cam
         parent_frame_id: gripper_yaw_dyn
-        translation: [0.0251, 0.060, 0.025]
+        translation: [0.0251, -0.060, 0.025]
         rotation: [0.0, 0.0, 0.0]
       end_effector_home:
         child_frame_id: end_effector_home
