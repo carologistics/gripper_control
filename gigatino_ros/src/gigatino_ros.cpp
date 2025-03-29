@@ -599,6 +599,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
                (curr_command_index_ == current_feedback_.command_index);
       });
       if (cancel_action_) {
+        action_running_ = false;
         return GigatinoResult::CANCELLED;
       }
       action_acknowledged =
