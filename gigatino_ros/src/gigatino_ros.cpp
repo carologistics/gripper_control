@@ -393,6 +393,8 @@ void GigatinoROS::start_receive() {
       [this](boost::system::error_code ec, std::size_t bytes_received) {
         RCLCPP_DEBUG(get_logger(), "received %lu bytes", bytes_received);
         if (!ec) {
+          std::vector<geometry_msgs::msg::TransformStamped>
+              transforms; // function to pack multiple transforms into 1 array
           {
             std::scoped_lock lock(feedback_mtx_);
             unpack_msgpack_data(bytes_received);
@@ -422,13 +424,11 @@ void GigatinoROS::start_receive() {
                 current_feedback_.stepper_positions[0] / 1000.f;
             transf_z.transform.translation.z =
                 current_feedback_.stepper_positions[2] / 1000.f;
-            std::vector<geometry_msgs::msg::TransformStamped>
-                transforms; // function to pack multiple transforms into 1 array
             transforms.push_back(transf_x);
             transforms.push_back(transf_yaw);
             transforms.push_back(transf_z);
-            tf_broadcaster_->sendTransform(transforms);
           }
+          tf_broadcaster_->sendTransform(transforms);
           action_cv_.notify_all();
         }
         // After receiving, continue to listen for more data
