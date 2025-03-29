@@ -1,8 +1,8 @@
 robotinobase3/gigatino_ros:
   ros__parameters:
     #connection
-    local_ip_address: "192.168.0.112"
-    remote_ip_address: "192.168.0.111"
+    local_ip_address: "192.168.3.230"
+    remote_ip_address: "192.168.3.199"
     send_port: 8888
     recv_port: 8889
     command_timeout_ms: 15000
