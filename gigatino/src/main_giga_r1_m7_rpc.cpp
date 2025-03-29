@@ -155,7 +155,7 @@ void read_command(void) {
     new_command_received = true;
     current_feedback.busy = true;
     for (const auto &mot : stepper_setup) {
-      mot->emergency_stop = false; // reset prior deteected step loss
+      mot->emergency_stop = false; // reset prior detected step loss
       mot->curr_steps =
           mot->get_absolute_pos(); // sync up step count with encoder
     }
