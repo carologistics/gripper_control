@@ -57,12 +57,15 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   max_send_attempts_ = get_parameter("max_send_attempts").as_int();
   gripper_open_pos_ = get_parameter("gripper_open_pos").as_double();
   gripper_close_pos_ = get_parameter("gripper_close_pos").as_double();
-  max_z_ = get_parameter("z_max").as_double();
-  min_z_ = get_parameter("z_min").as_double();
   max_x_ = get_parameter("x_max").as_double();
   min_x_ = get_parameter("x_min").as_double();
+  bound_threshold_x_ = get_parameter("x_bound_threshold").as_double();
   max_yaw_ = get_parameter("yaw_max").as_double();
   min_yaw_ = get_parameter("yaw_min").as_double();
+  bound_threshold_yaw_ = get_parameter("yaw_bound_threshold").as_double();
+  max_z_ = get_parameter("z_max").as_double();
+  min_z_ = get_parameter("z_min").as_double();
+  bound_threshold_z_ = get_parameter("z_bound_threshold").as_double();
   std::string local_ip_addr = get_parameter("local_ip_address").as_string();
   std::string remote_ip_addr = get_parameter("remote_ip_address").as_string();
   RCLCPP_INFO(get_logger(), "local address %s and port %li",
@@ -186,16 +189,16 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
             target_mot_x_ = x_abs * 1000;
             target_mot_yaw_ = target_mot_y;
             target_mot_z_ = z_abs * 1000;
-            if ((min_x_ < target_mot_x_ + 0.5f &&
-                 target_mot_x_ - 0.5f < max_x_) &&
-                (min_z_ < target_mot_z_ + 0.5f &&
-                 target_mot_z_ - 0.5f < max_z_) &&
-                (min_yaw_ < target_mot_yaw_ + 0.2f &&
-                 target_mot_yaw_ - 0.2f < max_yaw_)) {
+            if ((min_x_ < target_mot_x_ + bound_threshold_x_ &&
+                 target_mot_x_ - bound_threshold_x_ < max_x_) &&
+                (min_z_ < target_mot_z_ + bound_threshold_z_ &&
+                 target_mot_z_ - bound_threshold_z_ < max_z_) &&
+                (min_yaw_ < target_mot_yaw_ + bound_threshold_yaw_ &&
+                 target_mot_yaw_ - bound_threshold_yaw_ < max_yaw_)) {
               target_mot_x_ = std::clamp(target_mot_x_, min_x_, max_x_);
               target_mot_yaw_ = std::clamp(target_mot_yaw_, min_yaw_, max_yaw_);
               target_mot_z_ = std::clamp(target_mot_z_, min_z_, max_z_);
-              RCLCPP_INFO(get_logger(), "x.abs : %.6f", target_mot_x_);
+              RCLCPP_INFO(get_logger(), "x_abs : %.6f", target_mot_x_);
               RCLCPP_INFO(get_logger(), "yaw_angle : %.6f", target_mot_yaw_);
               RCLCPP_INFO(get_logger(), "z_abs : %.6f", target_mot_z_);
               return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;

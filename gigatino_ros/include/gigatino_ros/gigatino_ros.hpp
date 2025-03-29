@@ -82,6 +82,9 @@ private:
   float min_z_;
   float min_x_;
   float min_yaw_;
+  float bound_threshold_z_;
+  float bound_threshold_x_;
+  float bound_threshold_yaw_;
 
   float target_mot_x_, target_mot_yaw_, target_mot_z_;
 
