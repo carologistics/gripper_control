@@ -57,13 +57,22 @@ public:
   explicit GigatinoROS(const rclcpp::NodeOptions &options);
 
 private:
-  enum GigatinoResult { SUCCESS, FAILED, IGNORED, TIMEOUT, CANCELLED };
+  enum GigatinoResult {
+    SUCCESS,
+    FAILED,
+    IGNORED,
+    TIMEOUT,
+    CANCELLED,
+    EMERGENCY_STOP
+  };
   void publish();
   CallbackReturn on_configure(const rclcpp_lifecycle::State &);
   CallbackReturn on_activate(const rclcpp_lifecycle::State &);
   CallbackReturn on_deactivate(const rclcpp_lifecycle::State &);
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State &);
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State &);
+
+  GigatinoResult curr_command_result_;
 
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
@@ -136,6 +145,14 @@ private:
       break;
     case GigatinoResult::FAILED: {
       result->message = "Command failed";
+      RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
+                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
+                   result->message.c_str());
+      goal_handle->abort(result);
+      break;
+    }
+    case GigatinoResult::FAILED: {
+      result->message = "Emergency stop";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
                    result->message.c_str());

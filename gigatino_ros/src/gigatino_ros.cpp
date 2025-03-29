@@ -446,6 +446,7 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
 
     msgpack::object obj = msg.get();
     current_feedback_ = Feedback();
+    current_command_result_ = GigatinoResult::Success;
 
     // Check if the object is a map using the new API (v2)
     if (obj.type == msgpack::type::MAP) {
@@ -475,6 +476,15 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
           for (size_t i = 0; i < value.via.array.size && i < 4; ++i) {
             current_feedback_.stepper_endstops[i] =
                 value.via.array.ptr[i].as<bool>();
+          }
+        } else if (key == "stepper_emergency_stops" &&
+                   value.type == msgpack::type::ARRAY) {
+          for (size_t i = 0; i < value.via.array.size && i < 4; ++i) {
+            current_feedback_.stepper_emergency_stops[i] =
+                value.via.array.ptr[i].as<bool>();
+            if (current_feedback_.stepper_emergency_stops[i]) {
+              curr_command_result_ = GigatinoResult::EMERGENCY_STOP;
+            }
           }
         } else if (key == "wp_sensor" && value.type == msgpack::type::BOOLEAN) {
           current_feedback_.wp_sensor = value.as<bool>();
@@ -601,7 +611,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   // action already done
   if (!current_feedback_.busy) {
     action_running_ = false;
-    return GigatinoResult::SUCCESS;
+    return curr_command_result_;
   }
   // otherwise, wait for it to finish
   action_cv_.wait_for(lock, command_timeout_, [&]() {
@@ -615,6 +625,6 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   if (current_feedback_.busy) {
     return GigatinoResult::TIMEOUT;
   }
-  return GigatinoResult::SUCCESS;
+  return curr_command_result_;
 }
 RCLCPP_COMPONENTS_REGISTER_NODE(gigatino_ros::GigatinoROS)
