@@ -181,6 +181,7 @@ def launch_with_context(context, *args, **kwargs):
         namespace="/",
         package="rclcpp_components",
         executable="component_container_mt",
+        emulate_tty=True,
         output="screen",  # both
     )
     load_composable_nodes = LoadComposableNodes(
