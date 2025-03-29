@@ -28,7 +28,7 @@
 
 #include <array>
 
-#define CONTROL_DT 10 // milliseconds
+#define CONTROL_DT 9 // milliseconds
 
 Feedback current_feedback;
 int m4_data_read = -1;
