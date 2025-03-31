@@ -477,6 +477,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   // this function should be called after terminating concurrently running
   // actions.
   cancel_action();
+  msgpack::zone zone;
   {
     std::unique_lock<std::mutex> lock(feedback_mtx_);
     action_cv_.wait_for(lock, 1s, [this]() { return !action_running_; });
@@ -485,7 +486,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
     }
     action_running_ = true;
     curr_command_index_ = current_feedback_.command_index + 1;
-    msgpack::zone zone;
+
     data["command_index"] = msgpack::object(curr_command_index_, zone);
     cancel_action_ = false;
   }
