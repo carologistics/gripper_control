@@ -34,17 +34,25 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
   float t_1 = peak_accel_ / max_jerk_;
   float d_1 = max_jerk_ / 6.0f * std::pow(t_1, 3);
   float v_1 = max_jerk_ / 2.0f * std::pow(t_1, 2);
-  float d_decel = v_1 * t_1 + max_jerk_ * std::pow(t_1, 3) / 6.0f;
+  float v_decel = v_1 + max_jerk_ * std::pow(t_1, 2) / 2.0f;
+  if (v_decel > peak_speed_) {
+    peak_accel_ = std::sqrt(peak_speed_ * max_jerk_);
+    t_1 = peak_accel_ / max_jerk_;
+    d_1 = max_jerk_ / 6.0f * std::pow(t_1, 3);
+    v_1 = max_jerk_ / 2.0f * std::pow(t_1, 2);
+    v_decel = v_1 + max_jerk_ * std::pow(t_1, 2) / 2.0f;
+  }
+  float d_decel = v_1 * t_1 + 0.5f * peak_accel_ * std::pow(t_1, 2) -
+                  max_jerk_ * std::pow(t_1, 3) / 6.0f;
 
   // Check if we will not reach max acceleration at all
   if (2 * d_1 + 2 * d_decel > dist) {
-    Serial.println("Short distance");
-    // 0.6f = 3/5
-    peak_accel_ = std::pow(dist * 0.6f * std::pow(max_jerk_, 2), 1.0f / 3.0f);
+    peak_accel_ = std::pow(dist * 0.5f * std::pow(max_jerk_, 2), 1.0f / 3.0f);
     t_1 = peak_accel_ / max_jerk_;
     d_1 = max_jerk_ / 6.0 * std::pow(t_1, 3);
     v_1 = max_jerk_ / 2.0 * std::pow(t_1, 2);
-    d_decel = v_1 * t_1 + max_jerk_ / 6.0f * std::pow(t_1, 3);
+    d_decel = v_1 * t_1 + 0.5f * peak_accel_ * std::pow(t_1, 2) -
+              max_jerk_ * std::pow(t_1, 3) / 6.0f;
 
     dist_phase_2_ = 2 * dist; // disable phase
     dist_phase_3_ = d_1;
@@ -91,20 +99,6 @@ void SCurveMotionController::plan_curve(float start_pos, float target_pos) {
   dist_phase_7_ = dist - d_1;
   dist_phase_6_ = dist - d_2;
   dist_phase_5_ = dist - d_3;
-  Serial.print(" p1: ");
-  Serial.print(dist_phase_1_);
-  Serial.print(" p2: ");
-  Serial.print(dist_phase_2_);
-  Serial.print(" p3: ");
-  Serial.print(dist_phase_3_);
-  Serial.print(" p4: ");
-  Serial.print(dist_phase_4_);
-  Serial.print(" p5: ");
-  Serial.print(dist_phase_5_);
-  Serial.print(" p6: ");
-  Serial.print(dist_phase_6_);
-  Serial.print(" p7: ");
-  Serial.println(dist_phase_7_);
 }
 
 float SCurveMotionController::compute(float target, float current, float dt) {
