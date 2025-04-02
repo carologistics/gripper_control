@@ -132,7 +132,7 @@ float SCurveMotionController::compute(float target, float current, float dt) {
     decelerate_from_zero(dt);
   } else if (distance_traveled >= dist_phase_4_) {
     curr_phase_ = 4;
-    ((void)0); // do nothing
+    accel_ = 0; // make sure accel_ is exactly 0 (discretization errors happen)
   } else if (distance_traveled >= dist_phase_3_) {
     curr_phase_ = 3;
     decelerate_to_zero(dt);
