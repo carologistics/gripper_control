@@ -149,16 +149,16 @@ float SCurveMotionController::compute(float target, float current, float dt) {
 void SCurveMotionController::accelerate_from_zero(float dt) {
   if (forward_) {
     accel_ += max_jerk_ * dt;
-    accel_ = constrain(accel_, 0, 2 * peak_accel_);
+    accel_ = constrain(accel_, 0, peak_accel_);
   } else {
     accel_ -= max_jerk_ * dt;
-    accel_ = constrain(accel_, -2 * peak_accel_, 0);
+    accel_ = constrain(accel_, -peak_accel_, 0);
   }
   speed_ += accel_ * dt;
   if (forward_) {
-    speed_ = constrain(speed_, 0, 2 * peak_speed_);
+    speed_ = constrain(speed_, 0, peak_speed_);
   } else {
-    speed_ = constrain(speed_, -2 * peak_speed_, 0);
+    speed_ = constrain(speed_, -peak_speed_, 0);
   }
 }
 
