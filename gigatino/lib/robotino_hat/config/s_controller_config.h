@@ -6,10 +6,10 @@
 // in units (per second ^0 ^1 ^2 or ^3, respectively)
 
 #define MOT_X_MOTION_MIN_SPEED 30.f
-#define MOT_X_MOTION_MAX_SPEED 800.f
-#define MOT_X_MOTION_MAX_ACCEL 2000.f
-#define MOT_X_MOTION_MAX_JERK 2000.f
-#define MOT_X_MOTION_SHORT_DIST 10.f // mm
+#define MOT_X_MOTION_MAX_SPEED 2000.f
+#define MOT_X_MOTION_MAX_ACCEL 8000.f
+#define MOT_X_MOTION_MAX_JERK 20000.f
+#define MOT_X_MOTION_SHORT_DIST 0.0f // mm
 /**
 #define MOT_X_MOTION_MIN_SPEED 100.f
 #define MOT_X_MOTION_MAX_SPEED 100.f
