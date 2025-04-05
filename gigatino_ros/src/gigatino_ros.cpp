@@ -39,12 +39,15 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("max_send_attempts", 3);
   declare_parameter("gripper_open_pos", 110.0);
   declare_parameter("gripper_close_pos", 0.0);
-  declare_parameter("z_min", 0.0);
-  declare_parameter("z_max", 145.0);
   declare_parameter("x_min", 0.0);
   declare_parameter("x_max", 245.0);
+  declare_parameter("x_bound_threshold", 0.5);
   declare_parameter("yaw_min", 0.0);
   declare_parameter("yaw_max", 80.0);
+  declare_parameter("yaw_bound_threshold", 0.2);
+  declare_parameter("z_min", 0.0);
+  declare_parameter("z_max", 145.0);
+  declare_parameter("z_bound_threshold", 0.5);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
 
@@ -446,7 +449,7 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
 
     msgpack::object obj = msg.get();
     current_feedback_ = Feedback();
-    current_command_result_ = GigatinoResult::Success;
+    current_command_result_ = GigatinoResult::SUCCESS;
 
     // Check if the object is a map using the new API (v2)
     if (obj.type == msgpack::type::MAP) {
@@ -483,7 +486,7 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
             current_feedback_.stepper_emergency_stops[i] =
                 value.via.array.ptr[i].as<bool>();
             if (current_feedback_.stepper_emergency_stops[i]) {
-              curr_command_result_ = GigatinoResult::EMERGENCY_STOP;
+              current_command_result_ = GigatinoResult::EMERGENCY_STOP;
             }
           }
         } else if (key == "wp_sensor" && value.type == msgpack::type::BOOLEAN) {
@@ -612,7 +615,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   // action already done
   if (!current_feedback_.busy) {
     action_running_ = false;
-    return curr_command_result_;
+    return current_command_result_;
   }
   // otherwise, wait for it to finish
   action_cv_.wait_for(lock, command_timeout_, [&]() {
@@ -626,6 +629,6 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   if (current_feedback_.busy) {
     return GigatinoResult::TIMEOUT;
   }
-  return curr_command_result_;
+  return current_command_result_;
 }
 RCLCPP_COMPONENTS_REGISTER_NODE(gigatino_ros::GigatinoROS)

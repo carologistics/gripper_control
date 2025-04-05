@@ -72,7 +72,7 @@ private:
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State &);
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State &);
 
-  GigatinoResult curr_command_result_;
+  GigatinoResult current_command_result_;
 
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
@@ -151,7 +151,7 @@ private:
       goal_handle->abort(result);
       break;
     }
-    case GigatinoResult::FAILED: {
+    case GigatinoResult::EMERGENCY_STOP: {
       result->message = "Emergency stop";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
