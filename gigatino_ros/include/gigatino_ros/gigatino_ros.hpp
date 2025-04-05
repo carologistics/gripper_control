@@ -197,7 +197,7 @@ private:
   template <typename ActionT, typename GoalT>
   std::shared_ptr<rclcpp_action::Server<ActionT>>
   setup_server(const std::string &action_name,
-               std::function<std::map<std::string, msgpack::object>(
+               std::function<void(
                    msgpack::zone &,
                    std::shared_ptr<rclcpp_action::ServerGoalHandle<ActionT>>)>
                    goal_processor,
@@ -209,9 +209,19 @@ private:
     return rclcpp_action::create_server<ActionT>(
         this, action_name,
         // Goal handler
-        [this](const rclcpp_action::GoalUUID &,
-               std::shared_ptr<const GoalT>) -> rclcpp_action::GoalResponse {
-          return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+        [this](const rclcpp_action::GoalUUID &, std::shared_ptr<const GoalT>) {
+          if constexpr (std::is_same_v<GoalT, Calibrate::Goal> or
+                        std::is_same_v<GoalT, Gripper::Goal> or
+                        std::is_same_v<GoalT, Stop::Goal>) {
+            return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+          } else {
+            std::scoped_lock lk(feedback_mtx_);
+            if (current_feedback_.referenced) {
+              return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+            } else {
+              return rclcpp_action::GoalResponse::REJECT;
+            }
+          }
         },
         // Cancel handler
         [this](std::shared_ptr<GoalHandle>) -> rclcpp_action::CancelResponse {
@@ -221,23 +231,12 @@ private:
         // Accepted handler
         [this, action_name,
          goal_processor](std::shared_ptr<GoalHandle> goal_handle) {
-          msgpack::zone zone;
-          auto data = goal_processor(zone, goal_handle); // Call user function
-          if (data.size() == 0) {
-            RCLCPP_INFO(
-                get_logger(), "[uuid %s] No data given for %s",
-                rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
-                action_name.c_str());
-            return;
-          }
-
           RCLCPP_INFO(
               get_logger(), "[uuid %s] Starting action %s",
               rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
               action_name.c_str());
-
-          handle_result<GoalHandle, typename ActionT::Result>(
-              goal_handle, send_udp_message(data));
+          msgpack::zone zone;
+          goal_processor(zone, goal_handle);
         },
         server_options, cb_group);
   }
