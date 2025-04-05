@@ -132,9 +132,15 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
         if (res != GigatinoResult::SUCCESS) {
           handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
                         Calibrate::Result>(g_h, res);
-          return;
         } else {
-          return;
+          data = {
+              {"command", msgpack::object("CALIBRATE", zone)},
+              {"target_mot_yaw", msgpack::object(0.0f, zone)},
+              {"target_mot_z", msgpack::object(0.0f, zone)},
+          };
+          res = send_udp_message(data);
+          handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
+                        Calibrate::Result>(g_h, res);
         }
       },
       server_options, cb_group_);
@@ -143,11 +149,14 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       this, "gigatino/move",
       // Goal handler
       [this](
-          const rclcpp_action::GoalUUID &,
+          const rclcpp_action::GoalUUID &uuid,
           std::shared_ptr<const Move::Goal> g) -> rclcpp_action::GoalResponse {
         {
           std::scoped_lock lk(feedback_mtx_);
           if (!current_feedback_.referenced) {
+            RCLCPP_ERROR(get_logger(),
+                         "[uuid %s] Rejected, system not calibrated",
+                         rclcpp_action::to_string(uuid).c_str());
             return rclcpp_action::GoalResponse::REJECT;
           }
         }
@@ -395,12 +404,16 @@ GigatinoROS::on_deactivate(const rclcpp_lifecycle::State &state) {
 }
 
 CallbackReturn GigatinoROS::on_cleanup(const rclcpp_lifecycle::State &) {
+  cb_group_.reset();
   home_action_server_.reset();
   calibrate_action_server_.reset();
   move_action_server_.reset();
   gripper_action_server_.reset();
+  stop_action_server_.reset();
   feedback_pub_.reset();
-  cb_group_.reset();
+  tf_listener_.reset();
+  tf_broadcaster_.reset();
+  tf_buffer_.reset();
   RCLCPP_DEBUG(get_logger(), "on cleanup is called.");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;

@@ -209,7 +209,8 @@ private:
     return rclcpp_action::create_server<ActionT>(
         this, action_name,
         // Goal handler
-        [this](const rclcpp_action::GoalUUID &, std::shared_ptr<const GoalT>) {
+        [this](const rclcpp_action::GoalUUID &uuid,
+               std::shared_ptr<const GoalT>) {
           if constexpr (std::is_same_v<GoalT, Calibrate::Goal> or
                         std::is_same_v<GoalT, Gripper::Goal> or
                         std::is_same_v<GoalT, Stop::Goal>) {
@@ -219,6 +220,9 @@ private:
             if (current_feedback_.referenced) {
               return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
             } else {
+              RCLCPP_ERROR(get_logger(),
+                           "[uuid %s] Rejected, system not calibrated",
+                           rclcpp_action::to_string(uuid).c_str());
               return rclcpp_action::GoalResponse::REJECT;
             }
           }
