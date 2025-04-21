@@ -36,7 +36,7 @@
 #define SERVO_ROTATION_MAX_ANGLE 165
 
 // speed in deg per millisecond
-#define SERVO_GRIPPER_SPEED 0.7272  // assuming 0.22sec per 60 deg
-#define SERVO_ROTATION_SPEED 0.7272 // assuming 0.22sec per 60 deg
+#define SERVO_GRIPPER_SPEED 272.72  // assuming 0.22sec per 60 deg
+#define SERVO_ROTATION_SPEED 272.72 // assuming 0.22sec per 60 deg
 
 #endif // SERVO_CONFIG_H_

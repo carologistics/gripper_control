@@ -142,6 +142,10 @@ void gather_feedback(void) {
             ? !static_cast<bool>(digitalRead(stepper_setup[i]->endstop_pin))
             : static_cast<bool>(digitalRead(stepper_setup[i]->endstop_pin));
   }
+
+  for (size_t i = 0; i < servo_setup.size(); i++) {
+    current_feedback.servo_positions[i] = servo_setup[i]->approx_angle;
+  }
 }
 
 void send_feedback(void) {
@@ -200,14 +204,14 @@ inline bool servo_approx_angle(float dt) {
     if (current_command.servo_mask & (1 << i)) {
       if (current_command.servo_positions[i] != servo_setup[i]->approx_angle) {
         target_reached = false;
-        if (current_command.servo_positions[i] > servo_setup[i]->approx_angle) {
+        if (current_command.servo_positions[i] < servo_setup[i]->approx_angle) {
           servo_setup[i]->approx_angle =
               max(current_command.servo_positions[i],
-                  servo_setup[i]->approx_angle + servo_setup[i]->speed * dt);
+                  servo_setup[i]->approx_angle - servo_setup[i]->speed * dt);
         } else {
           servo_setup[i]->approx_angle =
               min(current_command.servo_positions[i],
-                  servo_setup[i]->approx_angle - servo_setup[i]->speed * dt);
+                  servo_setup[i]->approx_angle + servo_setup[i]->speed * dt);
         }
       } else {
         continue;

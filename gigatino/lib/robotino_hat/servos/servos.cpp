@@ -41,7 +41,9 @@ ServoSetup servo_gripper = {
     .timer_freq = SERVO_GRIPPER_PWM_TIM_FREQ,
     .pwm_prescaler = SERVO_GRIPPER_PWM_PRESCALER,
     .pwm_target_freq = SERVO_GRIPPER_PWM_TARGET_FREQ,
-    .pwm_threshold = SERVO_GRIPPER_MIN_ANGLE};
+    .pwm_threshold = SERVO_GRIPPER_MIN_ANGLE,
+    .approx_angle = 0.0f,
+    .speed = SERVO_GRIPPER_SPEED};
 
 ServoSetup servo_rotation = {
     .pwm = {PortID::PORT_I, 0, SERVO_ROTATION_PWM_PIN, TimerID::ID_TIM5,
@@ -53,5 +55,7 @@ ServoSetup servo_rotation = {
     .timer_freq = SERVO_ROTATION_PWM_TIM_FREQ,
     .pwm_prescaler = SERVO_ROTATION_PWM_PRESCALER,
     .pwm_target_freq = SERVO_ROTATION_PWM_TARGET_FREQ,
-    .pwm_threshold = SERVO_ROTATION_MIN_ANGLE};
+    .pwm_threshold = SERVO_ROTATION_MIN_ANGLE,
+    .approx_angle = 0.0f,
+    .speed = SERVO_ROTATION_SPEED};
 } // namespace servos
