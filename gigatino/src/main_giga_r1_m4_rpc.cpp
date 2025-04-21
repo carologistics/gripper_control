@@ -53,7 +53,7 @@ bool new_command_received = false;
 bool current_command_sent = false;
 Feedback current_feedback;
 
-#define CONTROL_DT 9 // milliseconds
+#define CONTROL_DT 49 // milliseconds
 unsigned long last_loop = 0;
 
 // Function to serialize Feedback struct into MessagePack
