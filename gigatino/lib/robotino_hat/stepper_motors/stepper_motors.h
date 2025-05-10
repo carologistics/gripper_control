@@ -13,6 +13,7 @@
 #include <s_controller/s_controller.h>
 #include <timer_setup/timer_setup.h>
 
+namespace stepper_motors {
 //
 /*
  * Stepper Setup for motors and encoders
@@ -50,6 +51,10 @@ struct StepperMotorSetup {
   const bool invert_enc_count;
   const bool invert_endstop;
   const float precision_threshold;
+  float curr_steps;
+  float curr_steps_per_sec;
+  float step_loss_threshold;
+  bool emergency_stop;
   // for smooth operation use this PID controller to control the motor
   PIDController pid_controller;
   SCurveMotionController motion_controller;
@@ -85,10 +90,11 @@ struct StepperMotorSetup {
   // internal helpers
   void set_zero_pos(void);
   float encoder_count_to_steps();
+  void update_curr_steps(float dt);
 };
-
 extern StepperMotorSetup mot_x;
 extern StepperMotorSetup mot_yaw;
 extern StepperMotorSetup mot_z;
 extern StepperMotorSetup mot_u;
+} // namespace stepper_motors
 #endif

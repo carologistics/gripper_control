@@ -120,7 +120,7 @@ void enable_timer_clock(TimerID timer) {
     return;
   }
   // TODO: probably does not need that much time.
-  delay(1000);
+  delay(100);
 }
 
 void setup_gpio_alternative_function(TimerPinSetup setup) {
@@ -170,7 +170,7 @@ void start_timer(TIM_TypeDef *timer) {
   // Start the timer
   timer->CR1 |= TIM_CR1_CEN;
   // TODO: probably does not need that much time.
-  delay(1000);
+  delay(100);
 }
 
 void setup_pwm(TimerPinSetup &p, uint16_t prescaler) {
@@ -263,7 +263,7 @@ void setup_encoder(TimerPinSetup &a, TimerPinSetup &b, uint16_t reset,
 
   TIM_TypeDef *timer = a.get_timer();
   timer->CR1 &= ~(TIM_CR1_CEN); // make sure timer is disabled while configuring
-  delay(1000);
+  delay(100);
 
   timer->PSC = 0;
   timer->CCER &= ~(TIM_CCER_CC1E); // disable capture-compare

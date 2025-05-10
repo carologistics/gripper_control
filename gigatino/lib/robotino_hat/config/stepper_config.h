@@ -85,9 +85,9 @@
 #define DIR_CCW true
 
 // precision threshold (in steps)
-#define MOT_X_PRECISION_THRESHOLD 0.5   // mm
-#define MOT_YAW_PRECISION_THRESHOLD 1.0 // 0.02 degree
-#define MOT_Z_PRECISION_THRESHOLD 0.5   // mm
+#define MOT_X_PRECISION_THRESHOLD 0.2   // mm
+#define MOT_YAW_PRECISION_THRESHOLD 0.2 // 0.02 degree
+#define MOT_Z_PRECISION_THRESHOLD 0.3   // mm
 #define MOT_U_PRECISION_THRESHOLD 0.5   // mm
 
 /**
@@ -126,10 +126,17 @@
 #define MOT_Z_INVERT_ENDSTOP true
 #define MOT_U_INVERT_ENDSTOP true
 
-// in steps per seconds
-#define MOT_X_REFERENCE_SPEED 200
-#define MOT_YAW_REFERENCE_SPEED 600
-#define MOT_Z_REFERENCE_SPEED 100
-#define MOT_U_REFERENCE_SPEED 200
+// in units per second
+#define MOT_X_REFERENCE_SPEED 50
+#define MOT_YAW_REFERENCE_SPEED 30
+#define MOT_Z_REFERENCE_SPEED 50
+#define MOT_U_REFERENCE_SPEED 50
+
+// in steps (automatically considers microstep setting), these need to be
+// generous as step estimates are not very accurate
+#define MOT_X_STEP_LOSS_THRESHOLD 100.0   // 2.2 mm
+#define MOT_YAW_STEP_LOSS_THRESHOLD 100.0 // roughly 5 degree diff
+#define MOT_Z_STEP_LOSS_THRESHOLD 100.0   // 3.5 mm
+#define MOT_U_STEP_LOSS_THRESHOLD 8.0
 
 #endif // STEPPER_CONFIG_H_
