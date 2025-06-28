@@ -50,9 +50,12 @@ GigatinoROS::GigatinoROS(const rclcpp::NodeOptions &options)
   declare_parameter("z_bound_threshold", 0.5);
   cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 }
+GigatinoROS::~GigatinoROS() {
+  RCLCPP_INFO(get_logger(), "Destructor is called.");
+}
 
 CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
-  RCLCPP_DEBUG(get_logger(), "on_configure() is called.");
+  RCLCPP_INFO(get_logger(), "on_configure() is called.");
   createBond();
   tf_prefix_ = get_parameter("tf_prefix").as_string();
   command_timeout_ =
@@ -341,10 +344,12 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
 }
 void GigatinoROS::stop_io_service() {
   if (io_running_) {
+    RCLCPP_INFO(get_logger(), "io_running_ true, stopping it");
     io_running_ = false;
     io_service_.stop();
     io_service_.reset();
     if (io_thread_.joinable()) {
+      RCLCPP_INFO(get_logger(), "actually joining the thread");
       io_thread_.join();
     }
   }
@@ -354,6 +359,7 @@ void GigatinoROS::start_io_service() {
     io_running_ = true;
     io_thread_ = std::thread([this]() {
       while (io_running_) {
+        RCLCPP_INFO(get_logger(), "io still running");
         io_service_.run();
         io_service_.reset();
       }
@@ -371,7 +377,7 @@ CallbackReturn GigatinoROS::on_activate(const rclcpp_lifecycle::State &state) {
               recv_endpoint_.port());
   start_io_service();
   start_receive();
-  RCLCPP_DEBUG(get_logger(), "on_activate() is called.");
+  RCLCPP_INFO(get_logger(), "on_activate() is called.");
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -397,7 +403,10 @@ GigatinoROS::on_deactivate(const rclcpp_lifecycle::State &state) {
   stop_io_service();
   RCLCPP_INFO(get_logger(), "destroy on deactivate");
   destroyBond();
-  RCLCPP_DEBUG(get_logger(), "on_deactivate() is called.");
+  if(bond_) {
+    RCLCPP_ERROR(get_logger(), "bond is still up!");
+  }
+  RCLCPP_INFO(get_logger(), "on_deactivate() is called.");
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -424,7 +433,7 @@ void GigatinoROS::start_receive() {
   socket_.async_receive_from(
       boost::asio::buffer(recv_buffer_), recv_endpoint_,
       [this](boost::system::error_code ec, std::size_t bytes_received) {
-        RCLCPP_DEBUG(get_logger(), "received %lu bytes", bytes_received);
+        // RCLCPP_INFO(get_logger(), "received %lu bytes", bytes_received);
         if (!ec) {
           std::vector<geometry_msgs::msg::TransformStamped>
               transforms; // function to pack multiple transforms into 1 array
@@ -546,7 +555,7 @@ CallbackReturn GigatinoROS::on_shutdown(const rclcpp_lifecycle::State &state) {
   // close_socket();
   // stop_io_service();
   RCLCPP_INFO(get_logger(), "destroy on shutdown");
-  RCLCPP_DEBUG(get_logger(), "on shutdown is called from state %s.",
+  RCLCPP_INFO(get_logger(), "on shutdown is called from state %s.",
                state.label().c_str());
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
@@ -625,7 +634,6 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
                       send_endpoint_);
 
       // print_buffer(sbuf);
-      RCLCPP_DEBUG(get_logger(), "Message sent");
       std::unique_lock<std::mutex> lock(feedback_mtx_);
       action_cv_.wait_for(lock, 1s, [&]() {
         return cancel_action_ ||

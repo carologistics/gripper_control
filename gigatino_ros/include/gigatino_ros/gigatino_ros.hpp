@@ -55,6 +55,7 @@ class GigatinoROS : public nav2_util::LifecycleNode {
 public:
   // **New constructor required for component registration**
   explicit GigatinoROS(const rclcpp::NodeOptions &options);
+  ~GigatinoROS();
 
 private:
   enum GigatinoResult {
