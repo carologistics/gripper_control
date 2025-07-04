@@ -403,7 +403,7 @@ GigatinoROS::on_deactivate(const rclcpp_lifecycle::State &state) {
   stop_io_service();
   RCLCPP_INFO(get_logger(), "destroy on deactivate");
   destroyBond();
-  if(bond_) {
+  if (bond_) {
     RCLCPP_ERROR(get_logger(), "bond is still up!");
   }
   RCLCPP_INFO(get_logger(), "on_deactivate() is called.");
@@ -556,7 +556,7 @@ CallbackReturn GigatinoROS::on_shutdown(const rclcpp_lifecycle::State &state) {
   // stop_io_service();
   RCLCPP_INFO(get_logger(), "destroy on shutdown");
   RCLCPP_INFO(get_logger(), "on shutdown is called from state %s.",
-               state.label().c_str());
+              state.label().c_str());
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;

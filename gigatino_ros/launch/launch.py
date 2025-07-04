@@ -199,10 +199,12 @@ def launch_with_context(context, *args, **kwargs):
                 plugin="gigatino_ros::GigatinoROS",
                 name="gigatino_ros",
                 namespace=namespace,
-                extra_arguments=[{
-                  # 'use_intra_process_comms': True,
-                 'log_level': log_level
-                }],
+                extra_arguments=[
+                    {
+                        # 'use_intra_process_comms': True,
+                        "log_level": log_level
+                    }
+                ],
                 parameters=[config_file, mockup_args, {"tf_prefix": tf_prefix, "namespace": namespace}],
             ),
         ],  # + static_transform_publishers,
