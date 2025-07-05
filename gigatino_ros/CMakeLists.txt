@@ -49,7 +49,7 @@ install(DIRECTORY
   DESTINATION
   share/${PROJECT_NAME})
 
-rclcpp_components_register_node(${PROJECT_NAME} PLUGIN "gigatino_ros::GigatinoROS" EXECUTABLE gigatino_node)
+rclcpp_components_register_node(${PROJECT_NAME} PLUGIN "gigatino_ros::GigatinoROS" EXECUTABLE gigatino_node EXECUTOR MultiThreadedExecutor)
 install(TARGETS
   ${PROJECT_NAME}
   ARCHIVE DESTINATION lib

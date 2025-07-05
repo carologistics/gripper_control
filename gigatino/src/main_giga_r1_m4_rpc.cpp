@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <shared_mem_data.h>
 
 // #define DEBUG_VIA_RPC 1
@@ -35,11 +34,11 @@
 #include <EthernetUdp3.h>
 
 #undef UDP_TX_PACKET_MAX_SIZE
-#define UDP_TX_PACKET_MAX_SIZE 128
+#define UDP_TX_PACKET_MAX_SIZE 512
 
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-IPAddress ip(192, 168, 1, 100);
-IPAddress remote_ip(192, 168, 1, 2); // where to send to
+IPAddress ip(192, 168, 3, 199);
+IPAddress remote_ip(192, 168, 3, 230); // where to send to
 EthernetUDP Udp;
 unsigned int localPort = 8888; // local port to listen on
 
@@ -47,14 +46,14 @@ unsigned int remote_port = 8889;
 // buffers for receiving and sending data
 char packetBuffer[UDP_TX_PACKET_MAX_SIZE]; // buffer to hold incoming packet,
 
-char serialized_out[128];
+char serialized_out[512];
 
 Command current_command;
 bool new_command_received = false;
 bool current_command_sent = false;
 Feedback current_feedback;
 
-#define CONTROL_DT 10 // milliseconds
+#define CONTROL_DT 49 // milliseconds
 unsigned long last_loop = 0;
 
 // Function to serialize Feedback struct into MessagePack
@@ -78,6 +77,11 @@ size_t serialize_feedback() {
   for (int i = 0; i < 4; i++)
     stepper_endstops.add(current_feedback.stepper_endstops[i]);
 
+  JsonArray stepper_emergency_stops =
+      doc["stepper_emergency_stops"].to<JsonArray>();
+  for (int i = 0; i < 4; i++)
+    stepper_emergency_stops.add(current_feedback.stepper_emergency_stops[i]);
+
   // Store native values
   doc["wp_sensor"] = current_feedback.wp_sensor;
   doc["busy"] = current_feedback.busy;
@@ -85,7 +89,32 @@ size_t serialize_feedback() {
   doc["command_index"] = current_feedback.command_index;
 
   // Serialize to MessagePack and send to output stream
-  return serializeMsgPack(doc, serialized_out, 128);
+  return serializeMsgPack(doc, serialized_out, 512);
+}
+
+inline void fill_stepper_mask(JsonDocument &doc) {
+  current_command.stepper_mask = 0;
+  int counter = 0;
+  for (auto &val :
+       {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
+    if (doc[val].is<float>()) {
+      current_command.stepper_mask |= 1 << counter;
+      current_command.stepper_positions[counter] = doc[val];
+    }
+    counter++;
+  }
+}
+
+inline void fill_servo_mask(JsonDocument &doc) {
+  current_command.servo_mask = 0;
+  int counter = 0;
+  for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
+    if (doc[val].is<float>()) {
+      current_command.servo_mask |= 1 << counter;
+      current_command.servo_positions[counter] = doc[val];
+    }
+    counter++;
+  }
 }
 
 bool load_command_from_json(JsonDocument &doc) {
@@ -104,29 +133,22 @@ bool load_command_from_json(JsonDocument &doc) {
   }
   if (doc["command"] == "MOVE") {
     current_command.command_id = CommandID::MOVE;
-    current_command.stepper_mask = 0;
-    current_command.servo_mask = 0;
-    int counter = 0;
-    for (auto &val :
-         {"target_mot_x", "target_mot_yaw", "target_mot_z", "target_mot_u"}) {
-      if (doc[val].is<float>()) {
-        current_command.stepper_mask |= 1 << counter;
-        current_command.stepper_positions[counter] = doc[val];
-      }
-      counter++;
-    }
-    counter = 0;
-    for (auto &val : {"target_servo_gripper", "target_servo_rotation"}) {
-      if (doc[val].is<float>()) {
-        current_command.servo_mask |= 1 << counter;
-        current_command.servo_positions[counter] = doc[val];
-      }
-      counter++;
-    }
+    fill_stepper_mask(doc);
+    fill_servo_mask(doc);
   } else if (doc["command"] == "CALIBRATE") {
     current_command.command_id = CommandID::CALIBRATE;
+    fill_stepper_mask(doc);
+    // default to calibrating everything
+    if (current_command.stepper_mask == 0) {
+      current_command.stepper_mask = 0b1111;
+    }
   } else if (doc["command"] == "STOP") {
     current_command.command_id = CommandID::STOP;
+    fill_stepper_mask(doc);
+    // default to calibrating everything
+    if (current_command.stepper_mask == 0) {
+      current_command.stepper_mask = 0b1111;
+    }
   } else if (doc["command"] == "PID_UPDATE") {
     current_command.command_id = CommandID::PID_UPDATE;
     if (!doc["motor"].is<const char *>()) {
@@ -176,13 +198,18 @@ bool load_command_from_json(JsonDocument &doc) {
     current_command.motion_controller_motor_id = mot_index;
     current_command.motion_controller_param_mask = 0;
     int counter = 0;
-    for (auto &val : {"max_speed", "max_accel", "max_jerk"}) {
+    for (auto &val :
+         {"min_speed", "max_speed", "max_accel", "max_jerk", "short_dist"}) {
       if (doc[val].is<float>()) {
         current_command.motion_controller_param_mask |= 1 << counter;
         current_command.motion_controller_params[counter] = doc[val];
       }
       counter++;
     }
+  } else if (doc["command"] == "CONST_SPEED") {
+    current_command.command_id = CommandID::CONST_SPEED;
+    fill_stepper_mask(doc);
+    fill_servo_mask(doc);
   } else {
 #ifdef DEBUG_VIA_RPC
     RPC.println("Load json failed, unknown command");

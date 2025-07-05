@@ -25,28 +25,31 @@ enum CommandID {
   STOP = 2,
   CALIBRATE = 3,
   PID_UPDATE = 4,
-  S_CONTROLLER_UPDATE = 5
+  S_CONTROLLER_UPDATE = 5,
+  CONST_SPEED = 6
 };
 
 // Ext -Ethernet-> M4 -Shared Mem-> M7
 typedef struct command {
   CommandID command_id;
   union {
-    float stepper_positions[4];
-    float pid_params[4];
-    float motion_controller_params[4];
-  };
-  union {
-    uint8_t stepper_mask;
+    struct {
+      float stepper_positions[4];
+      float servo_positions[2];
+      uint8_t stepper_mask;
+      uint8_t servo_mask;
+    };
+    struct {
+      float pid_params[6];
+      uint8_t pid_motor_id;
+      uint8_t pid_param_mask;
+    };
 
-    uint8_t pid_motor_id;
-    uint8_t motion_controller_motor_id;
-  };
-  float servo_positions[2];
-  union {
-    uint8_t servo_mask;
-    uint8_t pid_param_mask;
-    uint8_t motion_controller_param_mask;
+    struct {
+      float motion_controller_params[6];
+      uint8_t motion_controller_motor_id;
+      uint8_t motion_controller_param_mask;
+    };
   };
   size_t command_index;
 } __attribute__((aligned(8))) Command;
@@ -60,6 +63,7 @@ typedef struct feedback {
   float stepper_positions[4];
   float servo_positions[2];
   bool stepper_directions[4];
+  bool stepper_emergency_stops[4];
   bool stepper_endstops[4];
   bool wp_sensor;
   bool busy;

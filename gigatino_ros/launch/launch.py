@@ -19,7 +19,6 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.actions import GroupAction
 from launch.actions import LogInfo
 from launch.actions import OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -65,7 +64,10 @@ def launch_with_context(context, *args, **kwargs):
     gigatino_dir = get_package_share_directory("gigatino_ros")
 
     logger = get_logger("gigatino_ros_launch")
-    LaunchConfiguration("namespace")
+    namespace = LaunchConfiguration("namespace").perform(context)
+    tf_prefix = ""
+    if namespace != "":
+        tf_prefix = namespace + "/"
     config = LaunchConfiguration("gigatino_config")
     log_level = LaunchConfiguration("log_level")
     tf_config = LaunchConfiguration("tf_config")
@@ -112,10 +114,16 @@ def launch_with_context(context, *args, **kwargs):
         if None in [translation, rotation, frame_id, child_frame_id]:
             static_transform_publishers.append(LogInfo(msg="[WARN] Missing key(s) in transform. Skipping..."))
             continue
+        import tf_transformations as tf
+
+        tf.quaternion_from_euler(rotation[0], rotation[1], rotation[2])
+
         static_transform_publisher_node = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             output="screen",
+            namespace=namespace,
+            name="tf_" + transform,
             arguments=[
                 "--x",
                 str(translation[0]),
@@ -130,27 +138,35 @@ def launch_with_context(context, *args, **kwargs):
                 "--roll",
                 str(rotation[2]),
                 "--frame-id",
-                frame_id,
+                tf_prefix + frame_id,
                 "--child-frame-id",
-                child_frame_id,
+                tf_prefix + child_frame_id,
             ],
         )
+        # static_transform_publisher_node = ComposableNode(
+        #       name="tf_" + transform,
+        #       package="tf2_ros",
+        #       plugin="tf2_ros::StaticTransformBroadcasterNode",
+        #       parameters=[{"translation.x": translation[0],
+        #                    "translation.y": translation[1],
+        #                    "translation.z": translation[2],
+        #                    "rotation.x": quaternion[0],
+        #                    "rotation.y": quaternion[1],
+        #                    "rotation.z": quaternion[2],
+        #                    "rotation.w": quaternion[3],
+        #                    "frame": frame_id,
+        #                    "child_frame_id": child_frame_id,
+        #                    }],
+        # )
         static_transform_publishers.append(static_transform_publisher_node)
     # container = ComposableNodeContainer(
-    container = ComposableNodeContainer(
-        name="gigatino_container",
-        namespace="",
-        package="rclcpp_components",
-        executable="component_container_mt",
-        output="screen",  # both
-        emulate_tty=True,
-    )
     mockup_args = {}
     mockup_script = []
     if mockup == "true":
         mockup_script = [
             Node(
                 package="gigatino_ros",
+                namespace=namespace,
                 executable="gigatino_mockup.py",  # This is the name in setup.py
                 parameters=[config_file],
                 arguments=["--ros-args", "--log-level", log_level],
@@ -160,6 +176,14 @@ def launch_with_context(context, *args, **kwargs):
         ]
         mockup_args = {"local_ip_address": "127.0.0.1", "remote_ip_address": "127.0.0.1"}
 
+    container = ComposableNodeContainer(
+        name="gigatino_container",
+        namespace="/",
+        package="rclcpp_components",
+        executable="component_container_mt",
+        emulate_tty=True,
+        output="screen",  # both
+    )
     load_composable_nodes = LoadComposableNodes(
         target_container="gigatino_container",
         composable_node_descriptions=[
@@ -167,23 +191,25 @@ def launch_with_context(context, *args, **kwargs):
                 package="nav2_lifecycle_manager",
                 plugin="nav2_lifecycle_manager::LifecycleManager",
                 name="lifecycle_manager",
+                namespace=namespace,
                 parameters=[{"autostart": True, "node_names": ["gigatino_ros"]}],
             ),
             ComposableNode(
                 package="gigatino_ros",
                 plugin="gigatino_ros::GigatinoROS",
                 name="gigatino_ros",
-                parameters=[config_file, mockup_args],
+                namespace=namespace,
+                extra_arguments=[
+                    {
+                        # 'use_intra_process_comms': True,
+                        "log_level": log_level
+                    }
+                ],
+                parameters=[config_file, mockup_args, {"tf_prefix": tf_prefix, "namespace": namespace}],
             ),
-            # ComposableNode(
-            #    package="tf2_ros",
-            #    plugin="tf2_ros::StaticTransformBroadcasterNode",
-            #    name="gigatino_transform",
-            #    parameters=[{"translation.x": 10}],
-            # ),
-        ],
+        ],  # + static_transform_publishers,
     )
-    return [container, load_composable_nodes] + mockup_script + [GroupAction(actions=static_transform_publishers)]
+    return [container, load_composable_nodes] + mockup_script + static_transform_publishers
 
 
 def generate_launch_description():

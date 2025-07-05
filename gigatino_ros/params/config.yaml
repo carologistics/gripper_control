@@ -1,8 +1,22 @@
-gigatino_ros:
+/**:
   ros__parameters:
-    local_ip_address: "192.168.1.2"
-    remote_ip_address: "192.168.1.100"
+    #connection
+    local_ip_address: "192.168.3.230"
+    remote_ip_address: "192.168.3.199"
     send_port: 8888
     recv_port: 8889
     command_timeout_ms: 15000
     max_send_attempts: 3
+    # axis setup (in mm [x,z] or deg [yaw])
+    x_min: 0.0
+    x_max: 245.0
+    x_bound_threshold: 0.5
+    yaw_min: 0.0
+    yaw_max: 80.0
+    yaw_bound_threshold: 0.2
+    z_min: 0.0
+    z_max: 145.0
+    z_bound_threshold: 0.5
+    # gripper
+    gripper_open_pos: 110.0
+    gripper_close_pos: 0.0
