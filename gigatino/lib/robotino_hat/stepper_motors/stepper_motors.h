@@ -63,6 +63,8 @@ struct StepperMotorSetup {
   void init(void);
   // drive towards endstop with constant speed
   void reference(void);
+  // drive away from endstop with constant speed
+  void out_of_endstop(void);
   // use this to move axis with constant speed or combinded with pid controller
   // automatically releases motor breaks if defined
   void set_speed(float steps_per_sec);

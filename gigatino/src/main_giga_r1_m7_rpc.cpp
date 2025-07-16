@@ -39,6 +39,10 @@ bool new_command_received = false;
 unsigned long last_loop = 0;
 unsigned long loop_delta = CONTROL_DT;
 
+//Used in the calibrate function
+bool leave_endstop_phase = false;
+bool second_endstop_hit = false:
+
 // this determines the order for the position commands to be interpreted
 // e.g., first motor in this list will be x, second yaw, third z, fourth u
 
@@ -170,30 +174,52 @@ inline void calibrate(void) {
   bool calibrate_busy = false;
   for (size_t i = 0; i < stepper_setup.size(); i++) {
     if (current_command.stepper_mask & (1 << i)) {
-      calibrate_busy = calibrate_busy | !current_feedback.stepper_endstops[i];
+      const bool endstop_active = current_feedback.stepper_endstops[i];
+      const bool axis_busy = leave_endstop_phase ? endstop_active : !endstop_active;
+      calibrate_busy |= axis_busy;
     }
   }
-  if (!calibrate_busy) {
+  if (!calibrate_busy && moved_out_of_endstop) {
     current_feedback.busy = false;
     current_feedback.referenced = true;
     new_command_received = false;
-#ifdef SERIAL_OUTPUT
+  #ifdef SERIAL_OUTPUT
     Serial.println("Calibrate done");
-#endif
+  #endif
+    return;
+  }
+  if (!calibrate_busy && !leave_endstop_phase) {
+    if (second_endstop_hit){
+      current_feedback.busy = false;
+      current_feedback.referenced = true;
+      new_command_received = false;
+      second_endstop_hit = false;
+    #ifdef SERIAL_OUTPUT
+      Serial.println("Calibrate done");
+    #endif
+      return;
+    }
+    new_command_received = true;
+    leave_endstop_phase = true;
+    return;
+  }
+  if (!calibrate_busy && leave_endstop_phase) {
+    new_command_received = true;
+    leave_endstop_phase = false;
+    second_endstop_hit = true;
     return;
   }
   if (new_command_received) {
-#ifdef SERIAL_OUTPUT
-    Serial.println("Calibrate");
-#endif
     new_command_received = false;
 
     for (size_t i = 0; i < stepper_setup.size(); i++) {
       if (current_command.stepper_mask & (1 << i)) {
         if (!current_feedback.stepper_endstops[i]) {
-          stepper_setup[i]->reference();
+          (leave_endstop_phase ? stepper_setup[i]->out_of_endstop() 
+                     : stepper_setup[i]->reference());
         }
       }
+    }
     }
   }
 }
