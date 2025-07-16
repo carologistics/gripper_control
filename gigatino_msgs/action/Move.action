@@ -10,6 +10,7 @@ bool gripper_state
 bool use_gripper
 ---
 # Result
+uint8 status_code
 string message
 ---
 # Feedback

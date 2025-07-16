@@ -4,5 +4,6 @@ bool CLOSED = false
 bool open
 ---
 # Result
+uint8 status_code
 string message
 ---

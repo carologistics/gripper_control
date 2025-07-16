@@ -39,6 +39,7 @@
 #include "gigatino_msgs/action/move.hpp"
 #include "gigatino_msgs/action/stop.hpp"
 #include "gigatino_msgs/msg/feedback.hpp"
+#include "gigatino_msgs/msg/status_code.hpp"
 
 namespace gigatino_ros {
 constexpr size_t BUFFER_SIZE = 1024;
@@ -58,14 +59,6 @@ public:
   ~GigatinoROS();
 
 private:
-  enum GigatinoResult {
-    SUCCESS,
-    FAILED,
-    IGNORED,
-    TIMEOUT,
-    CANCELLED,
-    EMERGENCY_STOP
-  };
   void publish();
   CallbackReturn on_configure(const rclcpp_lifecycle::State &);
   CallbackReturn on_activate(const rclcpp_lifecycle::State &);
@@ -73,7 +66,7 @@ private:
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State &);
   CallbackReturn on_shutdown(const rclcpp_lifecycle::State &);
 
-  GigatinoResult current_command_result_;
+  uint8_t current_command_result_;
 
   boost::asio::io_service io_service_;
   boost::asio::ip::udp::socket socket_;
@@ -128,23 +121,23 @@ private:
 
   void unpack_msgpack_data(size_t size);
 
-  GigatinoROS::GigatinoResult
-  send_udp_message(std::map<std::string, msgpack::object> &data);
+  uint8_t send_udp_message(std::map<std::string, msgpack::object> &data);
 
   void print_buffer(const msgpack::sbuffer &buffer);
 
   template <typename GoalHandleType, typename ResultType>
   void handle_result(std::shared_ptr<GoalHandleType> goal_handle,
-                     GigatinoResult result_code) {
+                     uint8_t result_code) {
     auto result = std::make_shared<ResultType>();
+    result->status_code = result_code;
 
     switch (result_code) {
-    case GigatinoResult::SUCCESS:
+    case gigatino_msgs::msg::StatusCode::SUCCESS:
       RCLCPP_INFO(get_logger(), "[uuid %s] Action done",
                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str());
       goal_handle->succeed(result);
       break;
-    case GigatinoResult::FAILED: {
+    case gigatino_msgs::msg::StatusCode::GENERIC_FAILURE: {
       result->message = "Command failed";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
@@ -152,7 +145,7 @@ private:
       goal_handle->abort(result);
       break;
     }
-    case GigatinoResult::EMERGENCY_STOP: {
+    case gigatino_msgs::msg::StatusCode::EMERGENCY_STOP: {
       result->message = "Emergency stop";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
@@ -160,7 +153,7 @@ private:
       goal_handle->abort(result);
       break;
     }
-    case GigatinoResult::IGNORED: {
+    case gigatino_msgs::msg::StatusCode::COMM_LOST: {
       result->message = "Command not acknowledged";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
@@ -168,7 +161,7 @@ private:
       goal_handle->abort(result);
       break;
     }
-    case GigatinoResult::TIMEOUT: {
+    case gigatino_msgs::msg::StatusCode::TIMEOUT: {
       result->message = "Timeout while executing";
       RCLCPP_ERROR(get_logger(), "[uuid %s], %s",
                    rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
@@ -176,7 +169,7 @@ private:
       goal_handle->abort(result);
       break;
     }
-    case GigatinoResult::CANCELLED: {
+    case gigatino_msgs::msg::StatusCode::CANCELLED: {
       result->message = "Cancelled by other action";
       RCLCPP_WARN(get_logger(), "[uuid %s], %s",
                   rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),

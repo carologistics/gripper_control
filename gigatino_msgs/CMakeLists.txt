@@ -10,6 +10,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Feedback.msg"
+  "msg/StatusCode.msg"
   "action/Home.action"
   "action/Calibrate.action"
   "action/Move.action"
