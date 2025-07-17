@@ -106,8 +106,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
             {"command", msgpack::object("MOVE", zone)},
             {"target_mot_x", msgpack::object(0.0f, zone)},
         };
-        GigatinoResult res = send_udp_message(data);
-        if (res != GigatinoResult::SUCCESS) {
+        uint8_t res = send_udp_message(data);
+        if (res != gigatino_msgs::msg::StatusCode::SUCCESS) {
           handle_result<rclcpp_action::ServerGoalHandle<Home>, Home::Result>(
               g_h, res);
         } else {
@@ -131,8 +131,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
             {"command", msgpack::object("CALIBRATE", zone)},
             {"target_mot_x", msgpack::object(0.0f, zone)},
         };
-        GigatinoResult res = send_udp_message(data);
-        if (res != GigatinoResult::SUCCESS) {
+        uint8_t res = send_udp_message(data);
+        if (res != gigatino_msgs::msg::StatusCode::SUCCESS) {
           handle_result<rclcpp_action::ServerGoalHandle<Calibrate>,
                         Calibrate::Result>(g_h, res);
         } else {
@@ -278,8 +278,8 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
             get_logger(), "[uuid %s] Starting action %s",
             rclcpp_action::to_string(goal_handle->get_goal_id()).c_str(),
             "MOVE");
-        GigatinoResult outcome = send_udp_message(data);
-        if (outcome != GigatinoResult::SUCCESS) {
+        uint8_t outcome = send_udp_message(data);
+        if (outcome != gigatino_msgs::msg::StatusCode::SUCCESS) {
           handle_result<rclcpp_action::ServerGoalHandle<Move>, Move::Result>(
               goal_handle, outcome);
         } else {
@@ -318,7 +318,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
             {"command", msgpack::object("MOVE", zone)},
             {"target_servo_gripper", msgpack::object(target_servo_pos, zone)},
         };
-        GigatinoResult res = send_udp_message(data);
+        uint8_t res = send_udp_message(data);
         handle_result<rclcpp_action::ServerGoalHandle<Gripper>,
                       Gripper::Result>(g_h, res);
       },
@@ -330,7 +330,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
              std::shared_ptr<rclcpp_action::ServerGoalHandle<Stop>> g_h) {
         std::map<std::string, msgpack::object> data = {
             {"command", msgpack::object("STOP", zone)}};
-        GigatinoResult res = send_udp_message(data);
+        uint8_t res = send_udp_message(data);
         handle_result<rclcpp_action::ServerGoalHandle<Stop>, Stop::Result>(g_h,
                                                                            res);
       },
@@ -488,7 +488,7 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
 
     msgpack::object obj = msg.get();
     current_feedback_ = Feedback();
-    current_command_result_ = GigatinoResult::SUCCESS;
+    current_command_result_ = gigatino_msgs::msg::StatusCode::SUCCESS;
 
     // Check if the object is a map using the new API (v2)
     if (obj.type == msgpack::type::MAP) {
@@ -525,7 +525,8 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
             current_feedback_.stepper_emergency_stops[i] =
                 value.via.array.ptr[i].as<bool>();
             if (current_feedback_.stepper_emergency_stops[i]) {
-              current_command_result_ = GigatinoResult::EMERGENCY_STOP;
+              current_command_result_ =
+                  gigatino_msgs::msg::StatusCode::EMERGENCY_STOP;
             }
           }
         } else if (key == "wp_sensor" && value.type == msgpack::type::BOOLEAN) {
@@ -599,7 +600,7 @@ void GigatinoROS::print_buffer(const msgpack::sbuffer &buffer) {
   RCLCPP_INFO(get_logger(), "Buffer contents:\n%s", oss.str().c_str());
 }
 
-GigatinoROS::GigatinoResult
+uint8_t
 GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   // this function should be called after terminating concurrently running
   // actions.
@@ -626,7 +627,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   while (!action_acknowledged) {
     if (send_attempts > max_send_attempts_) {
       action_running_ = false;
-      return GigatinoResult::IGNORED;
+      return gigatino_msgs::msg::StatusCode::COMM_LOST;
     }
     send_attempts++;
     try {
@@ -641,7 +642,7 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
       });
       if (cancel_action_) {
         action_running_ = false;
-        return GigatinoResult::CANCELLED;
+        return gigatino_msgs::msg::StatusCode::CANCELLED;
       }
       action_acknowledged =
           (curr_command_index_ == current_feedback_.command_index);
@@ -662,10 +663,10 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
   });
   action_running_ = false;
   if (cancel_action_) {
-    return GigatinoResult::CANCELLED;
+    return gigatino_msgs::msg::StatusCode::CANCELLED;
   }
   if (current_feedback_.busy) {
-    return GigatinoResult::TIMEOUT;
+    return gigatino_msgs::msg::StatusCode::TIMEOUT;
   }
   return current_command_result_;
 }
