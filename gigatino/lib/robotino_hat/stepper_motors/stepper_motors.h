@@ -68,6 +68,8 @@ struct StepperMotorSetup {
   // use this to move axis with constant speed or combinded with pid controller
   // automatically releases motor breaks if defined
   void set_speed(float steps_per_sec);
+  // get current speed in steps per second
+  float get_curr_steps_per_sec(void);
   /*
    * Set either DIR_CW or DIR_CCW
    * mot_yaw:

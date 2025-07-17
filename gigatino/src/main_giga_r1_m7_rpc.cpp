@@ -164,6 +164,7 @@ void read_command(void) {
     current_feedback.busy = true;
     leave_endstop_phase = false;
     second_endstop_hit = false;
+    current_feedback.current_status = NO_FAILURE;
     for (const auto &mot : stepper_setup) {
       mot->emergency_stop = false; // reset prior detected step loss
       mot->curr_steps =
@@ -668,4 +669,14 @@ void loop() {
 #endif
 
   execute_command();
+  break;
+  if (current_command.command_id == CommandID::MOVE &&
+      current_feedback.current_status == 0) {
+    for (size_t i = 0; i < stepper_setup.size(); i++) {
+      if (stepper_setup[i]->get_curr_steps_per_sec == 0) {
+        current_feedback.current_status = GENERIC_FAILURE;
+        return;
+      }
+    }
+  }
 }

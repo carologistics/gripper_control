@@ -550,7 +550,14 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
           current_feedback_.referenced = value.as<bool>();
         } else if (key == "command_index" &&
                    value.type == msgpack::type::POSITIVE_INTEGER) {
-          current_feedback_.command_index = value.as<int>();
+          current_feedback_.current_status = value.as<int>();
+        } else if (key == "current_status" &&
+                   value.type == msgpack::type::POSITIVE_INTEGER) {
+          current_feedback_.current_status = value.as<int>();
+          if (current_feedback_.current_status != 0) {
+            current_command_result_ =
+                gigatino_msgs::msg::StatusCode::GENERIC_FAILURE;
+          }
         }
       }
     } else {

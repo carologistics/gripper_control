@@ -8,3 +8,4 @@ bool[4] stepper_emergency_stops
 bool wp_sensor
 bool busy
 bool referenced
+int32 current_status
