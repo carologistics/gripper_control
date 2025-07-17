@@ -125,6 +125,11 @@ void StepperMotorSetup::reference(void) {
   set_speed(unit_to_steps(reference_speed));
 }
 
+void StepperMotorSetup::out_of_endstop(void) {
+  set_dir(!reference_dir);
+  set_speed(unit_to_steps(reference_speed / 2));
+}
+
 float StepperMotorSetup::steps_to_unit(float steps) {
   return steps * rot_per_step / gear_ratio;
 }

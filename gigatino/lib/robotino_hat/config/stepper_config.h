@@ -127,9 +127,9 @@
 #define MOT_U_INVERT_ENDSTOP true
 
 // in units per second
-#define MOT_X_REFERENCE_SPEED 50
+#define MOT_X_REFERENCE_SPEED 100
 #define MOT_YAW_REFERENCE_SPEED 30
-#define MOT_Z_REFERENCE_SPEED 50
+#define MOT_Z_REFERENCE_SPEED 100
 #define MOT_U_REFERENCE_SPEED 50
 
 // in steps (automatically considers microstep setting), these need to be
