@@ -39,7 +39,7 @@ bool new_command_received = false;
 unsigned long last_loop = 0;
 unsigned long loop_delta = CONTROL_DT;
 
-//Used in the calibrate function
+// Used in the calibrate function
 bool leave_endstop_phase = false;
 bool second_endstop_hit = false;
 
@@ -84,9 +84,9 @@ void attach_interrupts() {
   attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_yaw.encoder_n_pin),
                   mot_yaw_enc_isr, RISING);
 
-  //pinMode(stepper_motors::mot_z.encoder_n_pin, INPUT_PULLUP);
-  //ttachInterrupt(digitalPinToInterrupt(stepper_motors::mot_z.encoder_n_pin),
-  //                mot_z_enc_isr, RISING);
+  // pinMode(stepper_motors::mot_z.encoder_n_pin, INPUT_PULLUP);
+  // ttachInterrupt(digitalPinToInterrupt(stepper_motors::mot_z.encoder_n_pin),
+  //                 mot_z_enc_isr, RISING);
 
   pinMode(stepper_motors::mot_u.encoder_n_pin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(stepper_motors::mot_u.encoder_n_pin),
@@ -177,7 +177,8 @@ inline void calibrate(void) {
   for (size_t i = 0; i < stepper_setup.size(); i++) {
     if (current_command.stepper_mask & (1 << i)) {
       const bool endstop_active = current_feedback.stepper_endstops[i];
-      const bool axis_busy = leave_endstop_phase ? endstop_active : !endstop_active;
+      const bool axis_busy =
+          leave_endstop_phase ? endstop_active : !endstop_active;
       calibrate_busy |= axis_busy;
     }
   }
@@ -185,19 +186,20 @@ inline void calibrate(void) {
     new_command_received = true;
     leave_endstop_phase = false;
     second_endstop_hit = true;
-      Serial.println("Calibrate entersecond_endstop_hit");
+    Serial.println("Calibrate entersecond_endstop_hit");
     return;
   }
   if (!calibrate_busy && !leave_endstop_phase) {
-    if (second_endstop_hit){
+    if (second_endstop_hit) {
       current_feedback.busy = false;
       current_feedback.referenced = true;
       new_command_received = false;
       second_endstop_hit = false;
-    #ifdef SERIAL_OUTPUT
+#ifdef SERIAL_OUTPUT
       Serial.println("Calibrate done");
-    #endif
-      return;    }
+#endif
+      return;
+    }
 
     Serial.println("Calibrate enter leave_endstop_phase");
     new_command_received = true;
@@ -209,14 +211,14 @@ inline void calibrate(void) {
 
     for (size_t i = 0; i < stepper_setup.size(); i++) {
       if (current_command.stepper_mask & (1 << i)) {
-          if(leave_endstop_phase) {
-            stepper_setup[i]->out_of_endstop();
-          } else {
-            if(!current_feedback.stepper_endstops[i]) {
-              stepper_setup[i]->reference();
-            }
+        if (leave_endstop_phase) {
+          stepper_setup[i]->out_of_endstop();
+        } else {
+          if (!current_feedback.stepper_endstops[i]) {
+            stepper_setup[i]->reference();
           }
-      } 
+        }
+      }
     }
   }
 }
