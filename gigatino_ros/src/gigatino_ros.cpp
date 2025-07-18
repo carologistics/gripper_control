@@ -86,6 +86,15 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
       udp::endpoint(boost::asio::ip::address::from_string(remote_ip_addr),
                     get_parameter("send_port").as_int());
 
+  feedback_time_ = this->get_clock()->now().seconds();
+  auto timer_callback = [this]() -> void {
+    double now = this->get_clock()->now().seconds();
+    if ((now - feedback_time_) < 3) {
+      RCLCPP_WARN(get_logger(), "No feedback received in the last 3 seconds.");
+    }
+  };
+  timer_ = create_wall_timer(std::chrono::seconds(1), timer_callback);
+
   rcl_action_server_options_t server_options =
       rcl_action_server_get_default_options();
   // rmw_qos_profile_t qos_profile;
@@ -423,6 +432,8 @@ CallbackReturn GigatinoROS::on_cleanup(const rclcpp_lifecycle::State &) {
   tf_listener_.reset();
   tf_broadcaster_.reset();
   tf_buffer_.reset();
+  timer_->cancel();
+  timer_.reset();
   RCLCPP_DEBUG(get_logger(), "on cleanup is called.");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -441,6 +452,7 @@ void GigatinoROS::start_receive() {
             std::scoped_lock lock(feedback_mtx_);
             unpack_msgpack_data(bytes_received);
             feedback_pub_->publish(current_feedback_);
+            feedback_time_ = this->get_clock()->now().seconds();
             // TODO: compute transform from abs positions
             geometry_msgs::msg::TransformStamped transf_yaw;
             transf_yaw.header.stamp = this->get_clock()->now();
