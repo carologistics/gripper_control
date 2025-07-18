@@ -89,7 +89,7 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   feedback_time_ = this->get_clock()->now().seconds();
   auto timer_callback = [this]() -> void {
     double now = this->get_clock()->now().seconds();
-    if ((now - feedback_time_) < 3) {
+    if ((now - feedback_time_) > 3) {
       RCLCPP_WARN(get_logger(), "No feedback received in the last 3 seconds.");
     }
   };
