@@ -19,13 +19,8 @@
 #define M7_BUFFER_SIZE FEEDBACK_MAX_BYTES
 #endif
 
-#ifndef NO_FAILURE
 #define NO_FAILURE 0
-#endif
-
-#ifndef GENERIC_FAILURE
 #define GENERIC_FAILURE 1
-#endif
 
 #endif
 

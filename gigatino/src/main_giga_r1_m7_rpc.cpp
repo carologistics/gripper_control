@@ -397,6 +397,17 @@ void execute_command(void) {
           mot->motion_controller.reset();
         }
       }
+      if (current_feedback.current_status == NO_FAILURE) {
+        for (size_t i = 0; i < stepper_setup.size(); i++) {
+          if ((stepper_setup[i]->curr_steps_per_sec == 0) &&
+              (abs(current_command.stepper_positions[i] -
+                   current_feedback.stepper_positions[i]) >
+               stepper_setup[i]->precision_threshold)) {
+            current_feedback.current_status = GENERIC_FAILURE;
+            return;
+          }
+        }
+      }
       break;
     }
     case CommandID::PID_UPDATE:
@@ -670,13 +681,4 @@ void loop() {
 
   execute_command();
   break;
-  if (current_command.command_id == CommandID::MOVE &&
-      current_feedback.current_status == 0) {
-    for (size_t i = 0; i < stepper_setup.size(); i++) {
-      if (stepper_setup[i]->get_curr_steps_per_sec == 0) {
-        current_feedback.current_status = GENERIC_FAILURE;
-        return;
-      }
-    }
-  }
 }

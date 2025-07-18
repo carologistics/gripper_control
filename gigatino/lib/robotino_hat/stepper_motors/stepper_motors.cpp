@@ -68,10 +68,6 @@ void StepperMotorSetup::set_speed(float steps_per_sec) {
   set_pwm(pwm, tim_max + 1, duty_cycle);
 }
 
-float StepperMotorSetup::get_curr_steps_per_sec(void) {
-  return curr_steps_per_sec;
-}
-
 float StepperMotorSetup::get_curr_steps(void)
 
     void StepperMotorSetup::set_dir(bool clock_wise) {
