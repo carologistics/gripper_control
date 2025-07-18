@@ -108,6 +108,8 @@ private:
   int curr_command_index_;
   std::condition_variable action_cv_;
   // end protection of feedback_mtx_
+  rclcpp::TimerBase::SharedPtr timer_;
+  double feedback_time_;
 
   std::array<char, BUFFER_SIZE> recv_buffer_;
 
