@@ -22,8 +22,6 @@
 #define NO_FAILURE 0
 #define GENERIC_FAILURE 1
 
-#endif
-
 enum CommandID {
   NO_COMMAND = 0,
   MOVE = 1,
