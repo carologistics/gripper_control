@@ -68,9 +68,7 @@ void StepperMotorSetup::set_speed(float steps_per_sec) {
   set_pwm(pwm, tim_max + 1, duty_cycle);
 }
 
-float StepperMotorSetup::get_curr_steps(void)
-
-    void StepperMotorSetup::set_dir(bool clock_wise) {
+void StepperMotorSetup::set_dir(bool clock_wise) {
   digitalWrite(dir_pin, clock_wise);
   direction = clock_wise;
 }

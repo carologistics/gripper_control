@@ -550,7 +550,7 @@ void GigatinoROS::unpack_msgpack_data(size_t size) {
           current_feedback_.referenced = value.as<bool>();
         } else if (key == "command_index" &&
                    value.type == msgpack::type::POSITIVE_INTEGER) {
-          current_feedback_.current_status = value.as<int>();
+          current_feedback_.command_index = value.as<int>();
         } else if (key == "current_status" &&
                    value.type == msgpack::type::POSITIVE_INTEGER) {
           current_feedback_.current_status = value.as<int>();
