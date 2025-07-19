@@ -400,9 +400,7 @@ void execute_command(void) {
       if (current_feedback.current_status == NO_FAILURE) {
         for (size_t i = 0; i < stepper_setup.size(); i++) {
           if ((stepper_setup[i]->curr_steps_per_sec == 0) &&
-              (abs(current_command.stepper_positions[i] -
-                   current_feedback.stepper_positions[i]) >
-               stepper_setup[i]->precision_threshold)) {
+              stepper_positions_reached == false) {
             current_feedback.current_status = GENERIC_FAILURE;
             return;
           }
@@ -680,5 +678,4 @@ void loop() {
 #endif
 
   execute_command();
-  break;
 }
