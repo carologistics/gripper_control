@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Carologistics
+// Copyright (c) 2025-2026 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@
 #include "gigatino_msgs/action/stop.hpp"
 #include "gigatino_msgs/msg/feedback.hpp"
 #include "gigatino_msgs/msg/status_code.hpp"
+
+#include "geometry_msgs/msg/vector3.hpp"
 
 namespace gigatino_ros {
 constexpr size_t BUFFER_SIZE = 1024;
@@ -241,6 +243,8 @@ private:
         server_options, cb_group);
   }
 
+  void absolute_move_callback(const geometry_msgs::msg::Vector3::SharedPtr msg);
+
   rclcpp::Publisher<Feedback>::SharedPtr feedback_pub_;
   rclcpp::CallbackGroup::SharedPtr cb_group_;
   rclcpp_action::Server<Home>::SharedPtr home_action_server_;
@@ -248,5 +252,7 @@ private:
   rclcpp_action::Server<Move>::SharedPtr move_action_server_;
   rclcpp_action::Server<Gripper>::SharedPtr gripper_action_server_;
   rclcpp_action::Server<Stop>::SharedPtr stop_action_server_;
+
+  rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr abs_move_sub_;
 };
 } // namespace gigatino_ros

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Carologistics
+// Copyright (c) 2025-2026 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -347,6 +347,14 @@ CallbackReturn GigatinoROS::on_configure(const rclcpp_lifecycle::State &) {
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+  rclcpp::SubscriptionOptions options;
+  options.callback_group = cb_group_;
+
+  abs_move_sub_ = create_subscription<geometry_msgs::msg::Vector3>(
+      "gigatino/move_absolute", rclcpp::QoS(10),
+      std::bind(&GigatinoROS::absolute_move_callback, this,
+                std::placeholders::_1),
+      rclcpp::SubscriptionOptions());
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::
       CallbackReturn::SUCCESS;
@@ -681,5 +689,48 @@ GigatinoROS::send_udp_message(std::map<std::string, msgpack::object> &data) {
     return gigatino_msgs::msg::StatusCode::TIMEOUT;
   }
   return current_command_result_;
+}
+
+void GigatinoROS::absolute_move_callback(
+    const geometry_msgs::msg::Vector3::SharedPtr msg) {
+  float target_x = msg->x;
+  float target_yaw = msg->y;
+  float target_z = msg->z;
+  {
+    std::scoped_lock lk(feedback_mtx_);
+
+    if (!current_feedback_.referenced) {
+      RCLCPP_WARN(get_logger(),
+                  "Rejected absolute move: system not calibrated");
+      return;
+    }
+  }
+
+  target_x = std::clamp(target_x, min_x_, max_x_);
+  target_yaw = std::clamp(target_yaw, min_yaw_, max_yaw_);
+  target_z = std::clamp(target_z, min_z_, max_z_);
+
+  if (!(min_x_ <= target_x && target_x <= max_x_) ||
+      !(min_yaw_ <= target_yaw && target_yaw <= max_yaw_) ||
+      !(min_z_ <= target_z && target_z <= max_z_)) {
+    RCLCPP_WARN(
+        get_logger(),
+        "Rejected absolute command outside limits: x=%.2f yaw=%.2f z=%.2f",
+        target_x, target_yaw, target_z);
+    return;
+  }
+
+  msgpack::zone zone;
+  std::map<std::string, msgpack::object> data = {
+      {"command", msgpack::object("MOVE", zone)},
+      {"target_mot_x", msgpack::object(target_x, zone)},
+      {"target_mot_yaw", msgpack::object(target_yaw, zone)},
+      {"target_mot_z", msgpack::object(target_z, zone)},
+  };
+
+  RCLCPP_INFO(get_logger(), "Absolute move command: x=%.2f yaw=%.2f z=%.2f",
+              target_x, target_yaw, target_z);
+
+  send_udp_message(data);
 }
 RCLCPP_COMPONENTS_REGISTER_NODE(gigatino_ros::GigatinoROS)
