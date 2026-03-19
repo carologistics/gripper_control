@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Carologistics
+// Copyright (c) 2025-2026 Carologistics
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,7 +201,9 @@ inline void calibrate(void) {
       return;
     }
 
+#ifdef SERIAL_OUTPUT
     Serial.println("Calibrate enter leave_endstop_phase");
+#endif
     new_command_received = true;
     leave_endstop_phase = true;
     return;

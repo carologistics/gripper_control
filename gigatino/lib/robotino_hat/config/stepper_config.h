@@ -134,9 +134,9 @@
 
 // in steps (automatically considers microstep setting), these need to be
 // generous as step estimates are not very accurate
-#define MOT_X_STEP_LOSS_THRESHOLD 100.0   // 2.2 mm
-#define MOT_YAW_STEP_LOSS_THRESHOLD 100.0 // roughly 5 degree diff
-#define MOT_Z_STEP_LOSS_THRESHOLD 100.0   // 3.5 mm
+#define MOT_X_STEP_LOSS_THRESHOLD 200.0   // 2.2 mm
+#define MOT_YAW_STEP_LOSS_THRESHOLD 200.0 // roughly 5 degree diff
+#define MOT_Z_STEP_LOSS_THRESHOLD 200.0   // 3.5 mm
 #define MOT_U_STEP_LOSS_THRESHOLD 8.0
 
 #endif // STEPPER_CONFIG_H_
