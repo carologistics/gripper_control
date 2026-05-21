@@ -32,8 +32,8 @@
 #define SERVO_ROTATION_MIN_ANGLE 0
 
 // MAX_PULSE_WIDTH causes this angle
-#define SERVO_GRIPPER_MAX_ANGLE 165
-#define SERVO_ROTATION_MAX_ANGLE 165
+#define SERVO_GRIPPER_MAX_ANGLE 100
+#define SERVO_ROTATION_MAX_ANGLE 100
 
 // speed in deg per millisecond
 #define SERVO_GRIPPER_SPEED 272.72  // assuming 0.22sec per 60 deg
