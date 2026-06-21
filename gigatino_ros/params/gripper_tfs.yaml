@@ -20,11 +20,11 @@
         parent_frame_id: gripper_yaw_dyn
         translation: [0.04025, 0.03955, 0.03]
         rotation: [0.0, 0.0, 0.0]
-      # where the middle of a workpiece base would be
+      # the middle of the long rectangular plate at the bottom of the gripper, where the eurobox is placed against
       gripper_end_effector:
         child_frame_id: gripper_end_effector
         parent_frame_id: gripper_x_dyn
-        translation: [0.0475, -0.0002, -0.04]
+        translation: [0.067, 0.0, -0.058]
         rotation: [0.0, 0.0, 0.0]
       gripper_home_origin:
         child_frame_id: gripper_home_origin
@@ -33,11 +33,11 @@
         rotation: [0.910, 0.0, 0.0]
       gripper_cam:
         child_frame_id: gripper_cam
-        parent_frame_id: gripper_yaw_dyn
-        translation: [0.006, -0.0699, 0.035]
+        parent_frame_id: gripper_x_dyn
+        translation: [0.044, 0.0, -0.04]
         rotation: [0.0, 0.0, 0.0]
       end_effector_home:
         child_frame_id: end_effector_home
         parent_frame_id: base_link
-        translation: [0.1871, -0.0198, 0.8547]
+        translation: [0.2066, -0.0196, 0.8367]
         rotation: [0.0, 0.0, 0.0]
