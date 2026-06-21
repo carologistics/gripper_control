@@ -39,5 +39,5 @@
       end_effector_home:
         child_frame_id: end_effector_home
         parent_frame_id: base_link
-        translation: [0.2066, -0.0196, 0.8367]
+        translation: [0.2092, -0.0265, 0.837]
         rotation: [0.0, 0.0, 0.0]
