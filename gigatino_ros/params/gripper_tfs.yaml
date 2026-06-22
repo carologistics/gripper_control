@@ -34,7 +34,7 @@
       gripper_cam:
         child_frame_id: gripper_cam
         parent_frame_id: gripper_x_dyn
-        translation: [0.044, 0.0, -0.04]
+        translation: [0.049, 0.0, -0.077]
         # [yaw, pitch, roll]: camera z -> gripper x, x -> -y, y -> -z
         rotation: [-1.57079632679, 0.0, -1.57079632679]
       end_effector_home:
