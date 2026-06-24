@@ -87,6 +87,7 @@ size_t serialize_feedback() {
   doc["busy"] = current_feedback.busy;
   doc["referenced"] = current_feedback.referenced;
   doc["command_index"] = current_feedback.command_index;
+  doc["current_status"] = current_feedback.current_status;
 
   // Serialize to MessagePack and send to output stream
   return serializeMsgPack(doc, serialized_out, 512);

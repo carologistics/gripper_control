@@ -19,6 +19,9 @@
 #define M7_BUFFER_SIZE FEEDBACK_MAX_BYTES
 #endif
 
+#define NO_FAILURE 0
+#define GENERIC_FAILURE 1
+
 enum CommandID {
   NO_COMMAND = 0,
   MOVE = 1,
@@ -69,6 +72,7 @@ typedef struct feedback {
   bool busy;
   bool referenced;
   size_t command_index;
+  size_t current_status;
 } __attribute__((aligned(8))) Feedback;
 typedef union feedback_buffer {
   Feedback feedback;                // Command structure
